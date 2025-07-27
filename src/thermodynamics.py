@@ -1,11 +1,16 @@
 import numpy as np
-from config.configuration import F_BEG_N, F_BEG_T, F_BEG_U
+from config.configuration import F_BEG_N, F_BEG_T, F_BEG_U, X_LEFT, X_RIGHT, XI_LEFT, XI_RIGHT
 
 
 class BKG:
     def __init__(self, n_x, n_xi):
-        self.x = np.linspace(0, 10, n_x)
-        self.xi = np.linspace(-20, 20, n_xi)
+        """
+
+        :param n_x: количество граней между ячейками. Соответственно n_cells = n_x - 1
+        :param n_xi: Количество точек по скорости. Здесь МКО не нужен
+        """
+        self.x = np.linspace(X_LEFT, X_RIGHT, n_x)
+        self.xi = np.linspace(XI_LEFT, XI_RIGHT, n_xi)
         self.xi_cell_size = self.xi[1] - self.xi[0]
         self.h = self.x[1] - self.x[0]
         self.init_conditions()
@@ -13,13 +18,13 @@ class BKG:
     def init_conditions(self):
 
         n = np.zeros((len(self.x) + 1))
-        n[1:-1] = F_BEG_N(self.x[:-1] + self.h / 2)
+        n[1:-1] = F_BEG_N( (self.x[:-1] + self.x[1:])/2 )
 
         u = np.zeros((len(self.x) + 1))
-        u[1:-1] = F_BEG_U(self.x[:-1] + self.h / 2)
+        u[1:-1] = F_BEG_U( (self.x[:-1] + self.x[1:])/2 )
 
         T = np.zeros((len(self.x) + 1))
-        T[1:-1] = F_BEG_T(self.x[:-1] + self.h / 2)
+        T[1:-1] = F_BEG_T( (self.x[:-1] + self.x[1:])/2 )
 
         self.F = np.zeros((len(self.x) + 1, len(self.xi), len(self.xi), len(self.xi)))
         self.F[1:-1, :, :, :] = self.init_F_vectorized(n, u, T)
