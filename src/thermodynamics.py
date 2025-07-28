@@ -64,6 +64,16 @@ class BKG:
         q = self.get_q(u)
         return n, u, T, q
 
+    def calculate(self, CFL, t_max, step_f):
+        tau = CFL * self.h / np.max(np.abs(self.xi))
+
+        for step_i in range(int(t_max / tau)):
+            print("step_i:", step_i, "/", int(t_max / tau))
+
+            for j in range(len(self.xi)):
+                xi_v = self.xi[j]
+                self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, tau, xi_v)
+
     """
     def get_mu(self, T, w):
         return T ** w
