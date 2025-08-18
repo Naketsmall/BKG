@@ -31,7 +31,7 @@ def minmod(F):
 
 
 def W_god(u_l, u_r, coef_per=1):
-    return 0.5 * coef_per * ((1 + np.sign(coef_per)) * u_l + ((-1 + np.sign(coef_per))) * u_r)
+    return 0.5 * np.sign(coef_per) * ((1 + np.sign(coef_per)) * u_l + ((-1 + np.sign(coef_per))) * u_r)
 
 class Solver(ABC):
     @abstractmethod

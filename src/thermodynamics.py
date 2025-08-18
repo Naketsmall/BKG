@@ -32,16 +32,18 @@ class BKG:
     def init_F_vectorized(self, n, u, T):
         self.XI1, self.XI2, self.XI3 = np.meshgrid(self.xi, self.xi, self.xi, indexing='ij')
         self.XI_SQUARE = (self.XI1 ** 2 + self.XI2 ** 2 + self.XI3 ** 2)
-        n_cells = len(self.x) - 1
 
         n_4d = n[1:-1].reshape(-1, 1, 1, 1)
         u_4d = u[1:-1].reshape(-1, 1, 1, 1)
         T_4d = T[1:-1].reshape(-1, 1, 1, 1)
 
-        A = n_4d / ((np.pi * T_4d) ** (1.5))
         v_sq = (self.XI1 - u_4d) ** 2 + self.XI2 ** 2 + self.XI3 ** 2
+        M = np.exp(-v_sq / T_4d)
 
-        F = A * np.exp(-v_sq / T_4d)
+        # дискретная нормировка по n
+        Z = np.sum(M, axis=(1, 2, 3), keepdims=True) * (self.xi_cell_size ** 3)
+        F = n_4d * M / Z
+
         return F
 
     def get_n(self):
