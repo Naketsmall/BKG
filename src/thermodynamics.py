@@ -31,6 +31,7 @@ class BKG:
 
     def init_F_vectorized(self, n, u, T):
         self.XI1, self.XI2, self.XI3 = np.meshgrid(self.xi, self.xi, self.xi, indexing='ij')
+        self.XI_SQUARE = (self.XI1 ** 2 + self.XI2 ** 2 + self.XI3 ** 2)
         n_cells = len(self.x) - 1
 
         n_4d = n[1:-1].reshape(-1, 1, 1, 1)
@@ -47,14 +48,14 @@ class BKG:
         return np.sum(self.F[1:-1] * self.xi_cell_size**3, axis=(1, 2, 3))
 
     def get_u1(self, n):
-        return self.xi @ np.sum(self.F[1:-1] * self.xi_cell_size**3, axis=(2, 3)).T / n
+        return np.sum(self.XI1 * self.F[1:-1] * (self.xi_cell_size ** 3), axis=(1, 2, 3)) / n
 
     def get_T(self, n, u):
-        return 2 * (np.sum((self.XI1 ** 2 + self.XI2 ** 2 + self.XI3 ** 2) * self.F[1:-1] * self.xi_cell_size**3, axis=(1, 2, 3)) / n - u ** 2) / 3
+        return 2 /3 * (np.sum(self.XI_SQUARE * self.F[1:-1] * self.xi_cell_size**3, axis=(1, 2, 3)) / n - u ** 2)
 
     def get_q(self, u):
-        q = 0.5 * np.sum(((self.XI1 - u.reshape(-1, 1, 1, 1)) * (self.XI1 ** 2 + self.XI2 ** 2 + self.XI3 ** 2) * self.F[1:-1])
-                         * self.xi_cell_size, axis=(1, 2, 3))
+        q = 0.5 * np.sum(((self.XI1 - u.reshape(-1, 1, 1, 1)) * self.XI_SQUARE * self.F[1:-1])
+                         * self.xi_cell_size**3, axis=(1, 2, 3))
         return q
 
     def get_macros(self):

@@ -1,4 +1,5 @@
 import numpy as np
+from abc import ABC, abstractmethod
 
 
 def PBC(F):
@@ -8,7 +9,6 @@ def PBC(F):
 def ZBC(F):
     F[0] = F[1]
     F[-1] = F[-2]
-
 
 def minmod(F):
     F_left = np.roll(F, shift=1, axis=0)
@@ -29,30 +29,53 @@ def minmod(F):
 
     return sigma
 
+
 def W_god(u_l, u_r, coef_per=1):
-    return 0.5 * coef_per * ((1 + np.sign(coef_per))*u_l + ((-1 + np.sign(coef_per)))*u_r)
+    return 0.5 * coef_per * ((1 + np.sign(coef_per)) * u_l + ((-1 + np.sign(coef_per))) * u_r)
+
+class Solver(ABC):
+    @abstractmethod
+    def step(self, F, h, tau, coef_per=1):
+        pass
+
+class SolverGodunov(Solver):
+    def step(self, F, h, tau, coef_per=1):
+        ZBC(F)
+        F_r = F
+        F_l = F
+        Ws = W_god(F_l[:-1], F_r[1:], coef_per)
+        F[1:-1] += coef_per * tau / h * (Ws[:-1] - Ws[1:])
+        return F[:]
 
 
-def step_RK(F, h, tau, coef_per=1):
-    F_pred = step_Kolgan(F.copy(), h, tau, coef_per)
-    F_corr = step_Kolgan(F_pred, h, tau, coef_per)
-    F_new = 0.5 * (F + F_corr)
-    return F_new
+class SolverKolgan(Solver):
+    def step(self, F, h, tau, coef_per=1):
+        ZBC(F)
+        sigma = minmod(F)
+        F_r = F - 0.5 * sigma
+        F_l = F + 0.5 * sigma
+        Ws = W_god(F_l[:-1], F_r[1:], coef_per)
+        F[1:-1] += coef_per * tau / h * (Ws[:-1] - Ws[1:])
+        return F[:]
+
+class SolverRK(SolverKolgan):
+    def step(self, F, h, tau, coef_per=1):
+        F_pred = super().step(F.copy(), h, tau, coef_per)
+        F_corr = super().step(F_pred, h, tau, coef_per)
+        F_new = 0.5 * (F + F_corr)
+        return F_new
 
 
-def step_Kolgan(F, h, tau, coef_per=1):
-    ZBC(F)
-    sigma = minmod(F)
-    F_r = F - 0.5 * sigma
-    F_l = F + 0.5 * sigma
-    Ws = W_god(F_l[:-1], F_r[1:], coef_per)
-    F[1:-1] += coef_per*tau/h * (Ws[:-1] - Ws[1:])
-    return F[:]
 
-def step_Godunov(F, h, tau, coef_per=1):
-    ZBC(F)
-    F_r = F
-    F_l = F
-    Ws = W_god(F_l[:-1], F_r[1:], coef_per)
-    F[1:-1] += coef_per*tau/h * (Ws[:-1] - Ws[1:])
-    return F[:]
+
+
+
+
+
+
+
+
+
+
+
+
