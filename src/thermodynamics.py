@@ -1,30 +1,31 @@
 import numpy as np
-from config.configuration import F_BEG_N, F_BEG_T, F_BEG_U, X_LEFT, X_RIGHT, XI_LEFT, XI_RIGHT
-
 
 class BKG:
-    def __init__(self, n_x, n_xi):
+    def __init__(self, config: dict):
         """
-
         :param n_x: количество граней между ячейками. Соответственно n_cells = n_x - 1
-        :param n_xi: Количество точек по скорости. Здесь МКО не нужен
         """
-        self.x = np.linspace(X_LEFT, X_RIGHT, n_x)
-        self.xi = np.linspace(XI_LEFT, XI_RIGHT, n_xi)
+        self.x = np.linspace(config['X_LEFT'], config['X_RIGHT'], config['n_x'])
+        self.xi = np.linspace(config['XI_LEFT'], config['XI_RIGHT'], config['n_xi'])
         self.xi_cell_size = self.xi[1] - self.xi[0]
         self.h = self.x[1] - self.x[0]
-        self.init_conditions()
 
-    def init_conditions(self):
+        self.Kn = config['Kn']
+        self.Pr = config['Pr']
+        self.w = config['w']
+
+        self.init_conditions(config)
+
+    def init_conditions(self, config):
 
         n = np.zeros((len(self.x) + 1))
-        n[1:-1] = F_BEG_N( (self.x[:-1] + self.x[1:])/2 )
+        n[1:-1] = config['F_BEG_N']( (self.x[:-1] + self.x[1:])/2 )
 
         u = np.zeros((len(self.x) + 1))
-        u[1:-1] = F_BEG_U( (self.x[:-1] + self.x[1:])/2 )
+        u[1:-1] = config['F_BEG_U']( (self.x[:-1] + self.x[1:])/2 )
 
         T = np.zeros((len(self.x) + 1))
-        T[1:-1] = F_BEG_T( (self.x[:-1] + self.x[1:])/2 )
+        T[1:-1] = config['F_BEG_T']( (self.x[:-1] + self.x[1:])/2 )
 
         self.F = np.zeros((len(self.x) + 1, len(self.xi), len(self.xi), len(self.xi)))
         self.F[1:-1, :, :, :] = self.init_F_vectorized(n, u, T)
@@ -71,11 +72,16 @@ class BKG:
         tau = CFL * self.h / np.max(np.abs(self.xi))
 
         for step_i in range(int(t_max / tau)):
-            print("step_i:", step_i, "/", int(t_max / tau))
+            print(f"calculation: {step_i} / {int(t_max / tau)}")
 
             for j in range(len(self.xi)):
                 xi_v = self.xi[j]
                 self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, tau, xi_v)
+
+        last_tau = t_max % tau
+        for j in range(len(self.xi)):
+            xi_v = self.xi[j]
+            self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, last_tau, xi_v)
 
     """
     def get_mu(self, T, w):

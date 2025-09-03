@@ -31,12 +31,14 @@ def minmod(F):
 
 
 def W_god(u_l, u_r, coef_per=1):
-    return 0.5 * np.sign(coef_per) * ((1 + np.sign(coef_per)) * u_l + ((-1 + np.sign(coef_per))) * u_r)
+    return 0.5 * np.sign(coef_per) * ((1 + np.sign(coef_per)) * u_l + (-1 + np.sign(coef_per)) * u_r)
+
 
 class Solver(ABC):
     @abstractmethod
     def step(self, F, h, tau, coef_per=1):
         pass
+
 
 class SolverGodunov(Solver):
     def step(self, F, h, tau, coef_per=1):
@@ -46,7 +48,6 @@ class SolverGodunov(Solver):
         Ws = W_god(F_l[:-1], F_r[1:], coef_per)
         F[1:-1] += coef_per * tau / h * (Ws[:-1] - Ws[1:])
         return F[:]
-
 
 class SolverKolgan(Solver):
     def step(self, F, h, tau, coef_per=1):
@@ -64,18 +65,4 @@ class SolverRK(SolverKolgan):
         F_corr = super().step(F_pred, h, tau, coef_per)
         F_new = 0.5 * (F + F_corr)
         return F_new
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

@@ -1,5 +1,6 @@
 from scipy.special import erf
 
+from config.configuration import *
 from src.thermodynamics import *
 import matplotlib.pyplot as plt
 from src.solvers import SolverGodunov, SolverRK
@@ -12,23 +13,23 @@ def u_exact(x, t):
     return 1/(4*np.pi**0.5)*np.exp(-(x/t)**2)/n_exact(x, t)
 
 CFL = 0.9
-t_max = 0.1
+t_max = 1
 
-n_x = 80
-n_xi = 40
-model = BKG(n_x, n_xi)
-solver = SolverRK()
+n_x = 100
+n_xi = 60
+
+model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
+                'XI_LEFT': XI_LEFT, 'XI_RIGHT': XI_RIGHT, 'n_xi': n_xi,
+                'F_BEG_N': F_BEG_N, 'F_BEG_U': F_BEG_U, 'F_BEG_T': F_BEG_T,
+                'Kn': TD_KN, 'Pr': TD_PR, 'w': TD_W}
+
+model = BKG(model_config)
+solver = SolverGodunov()
 model.calculate(CFL, t_max, solver.step)
 
 fig, axs = plt.subplots(1, 3)
 fig.suptitle(f'n_x:{n_x}, x:({X_LEFT},{X_RIGHT},{n_x}), xi:({XI_LEFT},{XI_RIGHT},{n_xi}), t:{t_max}, CFL:{CFL}')
 n, u, T, q = model.get_macros()
-#print('n:', n)
-#print('u:', u)
-#print('T:', T)
-
-
-
 
 axs[0].set_title('n (density)')
 axs[0].scatter(model.x[:-1]+model.h/2, n, linewidth=0.01)

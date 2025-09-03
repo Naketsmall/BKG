@@ -2,6 +2,11 @@ from src.thermodynamics import *
 
 import unittest
 
+"""
+MARK: NOT UPDATED FOR MODEL INITIALIZATION WITH CONFIG. SO NOW IT'S NOT PROPERLY WORKING
+"""
+
+
 class TestInitialConditions(unittest.TestCase):
     def test_create_0_10_100_n(self):
         model = BKG(100, 100)
