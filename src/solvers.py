@@ -36,31 +36,35 @@ def W_god(u_l, u_r, coef_per=1):
 
 class Solver(ABC):
     @abstractmethod
-    def step(self, F, h, tau, coef_per=1):
+    def step(self, F, h, tau, coef_per=1, J=None):
         pass
 
 
 class SolverGodunov(Solver):
-    def step(self, F, h, tau, coef_per=1):
+    def step(self, F, h, tau, coef_per=1, J=None):
         ZBC(F)
         F_r = F
         F_l = F
         Ws = W_god(F_l[:-1], F_r[1:], coef_per)
         F[1:-1] += coef_per * tau / h * (Ws[:-1] - Ws[1:])
-        return F[:]
+        if J is not None:
+            F[1:-1] += tau * J
+        return F
 
 class SolverKolgan(Solver):
-    def step(self, F, h, tau, coef_per=1):
+    def step(self, F, h, tau, coef_per=1, J=None):
         ZBC(F)
         sigma = minmod(F)
         F_r = F - 0.5 * sigma
         F_l = F + 0.5 * sigma
         Ws = W_god(F_l[:-1], F_r[1:], coef_per)
         F[1:-1] += coef_per * tau / h * (Ws[:-1] - Ws[1:])
-        return F[:]
+        if J is not None:
+            F[1:-1] += tau * J
+        return F
 
 class SolverRK(SolverKolgan):
-    def step(self, F, h, tau, coef_per=1):
+    def step(self, F, h, tau, coef_per=1, J=None):
         F_pred = super().step(F.copy(), h, tau, coef_per)
         F_corr = super().step(F_pred, h, tau, coef_per)
         F_new = 0.5 * (F + F_corr)
