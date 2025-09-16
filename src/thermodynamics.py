@@ -25,7 +25,7 @@ class BKG:
         u = np.zeros((len(self.x) + 1))
         u[1:-1] = config['F_BEG_U']( (self.x[:-1] + self.x[1:])/2 )
 
-        T = np.zeros((len(self.x) + 1))
+        T = np.zeros((len(self.x) + 1), dtype=np.float64)
         T[1:-1] = config['F_BEG_T']( (self.x[:-1] + self.x[1:])/2 )
 
         self.F = np.zeros((len(self.x) + 1, len(self.xi), len(self.xi), len(self.xi)))
@@ -44,6 +44,7 @@ class BKG:
 
         # дискретная нормировка по n
         Z = np.sum(M, axis=(1, 2, 3), keepdims=True) * (self.xi_cell_size ** 3)
+
         F = n_4d * M / Z
 
         return F
@@ -52,11 +53,14 @@ class BKG:
         return np.sum(self.F[1:-1] * self.xi_cell_size**3, axis=(1, 2, 3))
 
     def get_u1(self, n):
-        # Нет проверки на деление на 0. Можно return np.where(n > 0, u/n, 0.0)
-        return np.sum(self.XI1 * self.F[1:-1] * (self.xi_cell_size ** 3), axis=(1, 2, 3)) / n
+        u_num = np.sum(
+            self.XI1 * self.F[1:-1] * (self.xi_cell_size ** 3),
+            axis=(1, 2, 3)
+        )
+        return u_num / np.maximum(n, 1e-15)
 
     def get_T(self, n, u):
-        return 2 /3 * (np.sum(self.XI_SQUARE * self.F[1:-1] * self.xi_cell_size**3, axis=(1, 2, 3)) / n - u ** 2)
+        return 2 /3 * (np.sum(self.XI_SQUARE * self.F[1:-1] * self.xi_cell_size**3, axis=(1, 2, 3)) / np.maximum(n, 1e-15) - u ** 2)
 
     def get_q(self, u):
         q = 0.5 * np.sum(((self.XI1 - u.reshape(-1, 1, 1, 1)) * self.XI_SQUARE * self.F[1:-1])
@@ -75,33 +79,7 @@ class BKG:
 
     def get_nu(self, n, T):
         return n * T ** (1-self.w) * 0.9/self.Kn
-    """
-    def calculate(self, CFL, t_max, step_f, right_part=True):
-        tau = CFL * self.h / np.max(np.abs(self.xi))
 
-        for step_i in range(int(t_max / tau)):
-            print(f"calculation: {step_i} / {int(t_max / tau)}")
-
-            if right_part:
-                J = self.get_J()
-            for j in range(len(self.xi)):
-                xi_v = self.xi[j]
-                if right_part:
-                    self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, tau, xi_v, J[:, j, :, :])
-                else:
-                    self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, tau, xi_v)
-
-        last_tau = t_max % tau
-        if last_tau >= 1e-15:
-            if right_part:
-                J = self.get_J()
-            for j in range(len(self.xi)):
-                xi_v = self.xi[j]
-                if right_part:
-                    self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, last_tau, xi_v, J[:, j, :, :])
-                else:
-                    self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, last_tau, xi_v)
-    """
     def calculate(self, CFL, t_max, step_f, right_part=True):
         t_cur = 0
         while t_cur < t_max:
@@ -147,6 +125,8 @@ class BKG:
 
         shakhov_correction = (4 / 5) * (1 - self.Pr) * S * c[..., 0] * (c_sq - 2.5)
         fS = fM * (1 + shakhov_correction)
+
+
 
         nu =  self.get_nu(np.maximum(n, 1e-12), T) # T ** (1 - self.w) * (0.9 / self.Kn)
         nu_4d = nu.reshape(-1, 1, 1, 1)
