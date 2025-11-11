@@ -1,0 +1,40 @@
+import numpy as np
+from abc import ABC, abstractmethod
+
+
+def PBC(F):
+    F[0] = F[-2]
+    F[-1] = F[1]
+
+def ZBC(F):
+    F[0] = F[1]
+    F[-1] = F[-2]
+
+def minmod(F):
+    F_left = np.roll(F, shift=1, axis=0)
+    F_right = np.roll(F, shift=-1, axis=0)
+
+    du_minus = F - F_left
+    du_plus = F_right - F
+
+    sigma = np.zeros_like(F)
+    mask = (du_minus * du_plus) > 0
+    sigma[mask] = np.sign(du_minus[mask]) * np.minimum(
+        np.abs(du_minus[mask]),
+        np.abs(du_plus[mask])
+    )
+
+    sigma[0] = 0
+    sigma[-1] = 0
+
+    return sigma
+
+
+def W_god(u_l, u_r, coef_per=1):
+    return np.where(coef_per >= 0, u_l, u_r)
+
+
+class Solver(ABC):
+    @abstractmethod
+    def step(self, F, h, tau, coef_per=1, J=None):
+        pass
