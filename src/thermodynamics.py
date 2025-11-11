@@ -9,6 +9,7 @@ class BKG:
         self.x = np.linspace(config['X_LEFT'], config['X_RIGHT'], config['n_x'])
         self.xi = np.linspace(config['XI_LEFT'], config['XI_RIGHT'], config['n_xi'])
         self.xi_cell_size = self.xi[1] - self.xi[0]
+        self.dV = (self.xi[1] - self.xi[0]) ** 3
         self.h = self.x[1] - self.x[0]
 
         self.Kn = config['Kn']
@@ -32,39 +33,38 @@ class BKG:
         self.F[1:-1, :, :, :] = self.init_F_vectorized(n, u, T)
 
     def init_F_vectorized(self, n, u, T):
-        self.XI1, self.XI2, self.XI3 = np.meshgrid(self.xi, self.xi, self.xi, indexing='ij')
+        self.XI1 = self.xi[:, None, None]
+        self.XI2 = self.xi[None, :, None]
+        self.XI3 = self.xi[None, None, :]
         self.XI_SQUARE = (self.XI1 ** 2 + self.XI2 ** 2 + self.XI3 ** 2)
 
-        n_4d = n[1:-1].reshape(-1, 1, 1, 1)
-        u_4d = u[1:-1].reshape(-1, 1, 1, 1)
-        T_4d = T[1:-1].reshape(-1, 1, 1, 1)
+        n_4d = n[1:-1, None, None, None]
+        u_4d = u[1:-1, None, None, None]
+        T_4d = T[1:-1, None, None, None]
 
         v_sq = (self.XI1 - u_4d) ** 2 + self.XI2 ** 2 + self.XI3 ** 2
+
         M = np.exp(-v_sq / T_4d)
 
-        # дискретная нормировка по n
-        Z = np.sum(M, axis=(1, 2, 3), keepdims=True) * (self.xi_cell_size ** 3)
-
+        Z = np.sum(M, axis=(1, 2, 3), keepdims=True) * self.dV
         F = n_4d * M / Z
 
         return F
 
     def get_n(self):
-        return np.sum(self.F[1:-1] * self.xi_cell_size**3, axis=(1, 2, 3))
+        return np.einsum('ijkl->i', self.F[1:-1]) * self.dV
 
     def get_u1(self, n):
-        u_num = np.sum(
-            self.XI1 * self.F[1:-1] * (self.xi_cell_size ** 3),
-            axis=(1, 2, 3)
-        )
+        u_num = np.einsum('ijkl,j->i', self.F[1:-1], self.xi) * self.dV
         return u_num / np.maximum(n, 1e-15)
 
     def get_T(self, n, u):
-        return 2 /3 * (np.sum(self.XI_SQUARE * self.F[1:-1] * self.xi_cell_size**3, axis=(1, 2, 3)) / np.maximum(n, 1e-15) - u ** 2)
+        E = np.einsum('ijkl, jkl -> i', self.F[1:-1], self.XI_SQUARE) * self.dV
+        return (2 / 3) * (E / np.maximum(n, 1e-15) - u ** 2)
 
     def get_q(self, u):
-        q = 0.5 * np.sum(((self.XI1 - u.reshape(-1, 1, 1, 1)) * self.XI_SQUARE * self.F[1:-1])
-                         * self.xi_cell_size**3, axis=(1, 2, 3))
+        xi1_shifted = self.XI1[None, :, :, :] - u[:, None, None, None]
+        q = 0.5 * np.einsum('ijkl, ijkl -> i', xi1_shifted * self.XI_SQUARE, self.F[1:-1]) * self.dV
         return q
 
     def get_macros(self):
@@ -100,30 +100,23 @@ class BKG:
     def get_J(self):
         n, u, T, q = self.get_macros()
 
-        n_4d = n.reshape(-1, 1, 1, 1)
-        u_4d = u.reshape(-1, 1, 1, 1)
-        T_4d = np.maximum(T.reshape(-1, 1, 1, 1), 1e-12)
-        q_4d = q.reshape(-1, 1, 1, 1)
+        n_4d = n[:, None, None, None]
+        u_4d = u[:, None, None, None]
+        T_4d = np.maximum(T[:, None, None, None], 1e-12)
+        q_4d = q[:, None, None, None]
 
-        thermal_velocity_x = self.XI1[None, :, :, :] - u_4d
-        thermal_velocity_y = np.broadcast_to(self.XI2[None, :, :, :], thermal_velocity_x.shape)
-        thermal_velocity_z = np.broadcast_to(self.XI3[None, :, :, :], thermal_velocity_x.shape)
+        tx = (self.XI1[None] - u_4d) / np.sqrt(T_4d)
+        ty = self.XI2[None] / np.sqrt(T_4d)
+        tz = self.XI3[None] / np.sqrt(T_4d)
+        c_sq = tx * tx + ty * ty + tz * tz
+        np.exp(-c_sq, out=c_sq)
+        M = c_sq
 
-        thermal_velocity = np.stack([thermal_velocity_x,
-                                     thermal_velocity_y,
-                                     thermal_velocity_z], axis=-1)
-
-        sqrtT = np.sqrt(T_4d)
-        c = thermal_velocity / sqrtT[..., None]
-        c_sq = np.sum(c ** 2, axis=-1)
-
-
-        M = np.exp(-c_sq)
-        Z = np.sum(M, axis=(1, 2, 3), keepdims=True) * (self.xi_cell_size ** 3)
+        Z = np.sum(M, axis=(1, 2, 3), keepdims=True) * self.dV
         fM = n_4d * M / Z
         S = 2 * q_4d / (np.maximum(n_4d, 1e-12) * T_4d ** 1.5)
 
-        shakhov_correction = (4 / 5) * (1 - self.Pr) * S * c[..., 0] * (c_sq - 2.5)
+        shakhov_correction = (4 / 5) * (1 - self.Pr) * S * tx * (c_sq - 2.5)
         fS = fM * (1 + shakhov_correction)
 
 
