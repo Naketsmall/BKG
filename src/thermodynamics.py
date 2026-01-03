@@ -1,30 +1,15 @@
 from typing import Tuple
+from src.config.libloader import xp, cuda_is_available
 
 import numpy as np
 
-class BKG:
-    def __init__(self, config: dict, xp=None):
-        """
-        :param n_x: количество граней между ячейками. Соответственно n_cells = n_x - 1
-        """
 
 
-        if xp is None:
-            try:
-                import cupy as cp
-                cp.cuda.Device(0).compute_capability
-                xp = cp
-                print("Используем GPU через CuPy")
-                self.cuda_is_available = 1
-            except Exception:
-                xp = np
-                print("GPU недоступно, используем CPU через NumPy")
-        self.cuda_is_available = not (xp is np)
-        self.xp = xp
+class ModelProperties:
+    def __init__(self, config: dict):
 
-
-        self.x = self.xp.linspace(config['X_LEFT'], config['X_RIGHT'], config['n_x'])
-        self.xi = self.xp.linspace(config['XI_LEFT'], config['XI_RIGHT'], config['n_xi'])
+        self.x = xp.linspace(config['X_LEFT'], config['X_RIGHT'], config['n_x'])
+        self.xi = xp.linspace(config['XI_LEFT'], config['XI_RIGHT'], config['n_xi'])
         self.xi_cell_size = self.xi[1] - self.xi[0]
         self.dV = (self.xi[1] - self.xi[0]) ** 3
         self.h = self.x[1] - self.x[0]
@@ -37,119 +22,182 @@ class BKG:
         self.Pr = config['Pr']
         self.w = config['w']
 
-        self.init_conditions(config)
 
-    def init_conditions(self, config):
+class ModelState:
 
-        n = self.xp.zeros((len(self.x) + 1))
-        n[1:-1] = config['F_BEG_N']( (self.x[:-1] + self.x[1:])/2 )
+    def __init__(self, properties: ModelProperties, config: dict):
+        self.F = None
+        self.init_conditions(properties, config)
 
-        u = self.xp.zeros((len(self.x) + 1))
-        u[1:-1] = config['F_BEG_U']( (self.x[:-1] + self.x[1:])/2 )
+    def init_conditions(self, properties: ModelProperties, config: dict):
 
-        T = self.xp.zeros((len(self.x) + 1), dtype=self.xp.float64)
-        T[1:-1] = config['F_BEG_T']( (self.x[:-1] + self.x[1:])/2 )
+        n = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
+        n[1:-1] = config['F_BEG_N']( (properties.x[:-1] + properties.x[1:])/2 )
 
-        self.F = self.xp.zeros((len(self.x) + 1, len(self.xi), len(self.xi), len(self.xi)))
-        self.F[1:-1, :, :, :] = self.init_F_vectorized(n, u, T)
+        u = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
+        u[1:-1] = config['F_BEG_U']( (properties.x[:-1] + properties.x[1:])/2 )
 
-    def init_F_vectorized(self, n, u, T):
+        T = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
+        T[1:-1] = config['F_BEG_T']( (properties.x[:-1] + properties.x[1:])/2 )
+
+        self.F = xp.zeros((len(properties.x) + 1, len(properties.xi), len(properties.xi), len(properties.xi)))
+        self.F[1:-1, :, :, :] = self.init_F_vectorized(n, u, T, properties)
+
+    @staticmethod
+    def init_F_vectorized(n, u, T, properties: ModelProperties):
 
         n_4d = n[1:-1, None, None, None]
         u_4d = u[1:-1, None, None, None]
         T_4d = T[1:-1, None, None, None]
 
-        v_sq = (self.XI1 - u_4d) ** 2 + self.XI2 ** 2 + self.XI3 ** 2
+        v_sq = (properties.XI1 - u_4d) ** 2 + properties.XI2 ** 2 + properties.XI3 ** 2
 
-        M = self.xp.exp(-v_sq / T_4d)
+        M = xp.exp(-v_sq / T_4d)
 
-        Z = self.xp.sum(M, axis=(1, 2, 3), keepdims=True) * self.dV
+        Z = xp.sum(M, axis=(1, 2, 3), keepdims=True) * properties.dV
         F = n_4d * M / Z
 
         return F
 
-    def get_n(self):
-        return self.xp.einsum('ijkl->i', self.F[1:-1]) * self.dV
+    def get_F(self):
+        return self.F
 
-    def get_u1(self, n):
-        u_num = self.xp.einsum('ijkl,j->i', self.F[1:-1], self.xi) * self.dV
-        return u_num / self.xp.maximum(n, 1e-15)
+    def set_F(self, F):
+        if F.shape != self.F.shape:
+            raise ValueError(f"Shape mismatch error: F.shape: {F.shape} != self.F.shape: {self.F.shape}")
+        self.F = F
 
-    def get_T(self, n, u):
-        E = self.xp.einsum('ijkl, jkl -> i', self.F[1:-1], self.XI_SQUARE) * self.dV
-        return (2 / 3) * (E / self.xp.maximum(n, 1e-15) - u ** 2)
 
-    def get_q(self, u):
-        xi1_shifted = self.XI1[None, :, :, :] - u[:, None, None, None]
-        q = 0.5 * self.xp.einsum('ijkl, ijkl -> i', xi1_shifted * self.XI_SQUARE, self.F[1:-1]) * self.dV
+class PropertyCalculator:
+
+    @staticmethod
+    def get_n(F, properties: ModelProperties):
+        return xp.einsum('ijkl->i', F[1:-1]) * properties.dV
+
+    @staticmethod
+    def get_u1(F, n, properties: ModelProperties):
+        u_num = xp.einsum('ijkl,j->i', F[1:-1], properties.xi) * properties.dV
+        return u_num / xp.maximum(n, 1e-15)
+
+    @staticmethod
+    def get_T(F, n, u, properties: ModelProperties):
+        E = xp.einsum('ijkl, jkl -> i', F[1:-1], properties.XI_SQUARE) * properties.dV
+        return (2 / 3) * (E / xp.maximum(n, 1e-15) - u ** 2)
+
+    @staticmethod
+    def get_q(F, u, properties: ModelProperties):
+        xi1_shifted = properties.XI1[None, :, :, :] - u[:, None, None, None]
+        q = 0.5 * xp.einsum('ijkl, ijkl -> i', xi1_shifted * properties.XI_SQUARE, F[1:-1]) * properties.dV
         return q
 
-    def get_macros(self):
-        n = self.get_n()
-        u = self.get_u1(n)
-        T = self.get_T(n, u)
-        q = self.get_q(u)
+    @staticmethod
+    def get_macros(F, properties: ModelProperties):
+        n = PropertyCalculator.get_n(F, properties)
+        u = PropertyCalculator.get_u1(F, n, properties)
+        T = PropertyCalculator.get_T(F, n, u, properties)
+        q = PropertyCalculator.get_q(F, u, properties)
         return n, u, T, q
 
-    def get_solution_macros(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        n = self.get_n()
-        u = self.get_u1(n)
-        T = self.get_T(n, u)
-        q = self.get_q(u)
-
-        if self.cuda_is_available:
-            return self.xp.asnumpy(n), self.xp.asnumpy(u), self.xp.asnumpy(T), self.xp.asnumpy(q)
+    @staticmethod
+    def get_solution_macros(F, properties: ModelProperties) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        n, u, T, q = PropertyCalculator.get_macros(F, properties)
+        if cuda_is_available:
+            return xp.asnumpy(n), xp.asnumpy(u), xp.asnumpy(T), xp.asnumpy(q)
         else:
             return n, u, T, q
 
+    @staticmethod
+    def get_mu(T, properties: ModelProperties):
+        return T**properties.w
 
-    def get_mu(self, T):
-        return T**self.w
+    @staticmethod
+    def get_nu(n, T, properties: ModelProperties):
+        return n * T ** (1 - properties.w) * 0.9 / properties.Kn
 
-    def get_nu(self, n, T):
-        return n * T ** (1-self.w) * 0.9/self.Kn
-
-    def calculate(self, CFL, t_max, step_f, right_part=True):
-        t_cur = 0
-        while t_cur < t_max:
-            print(f"calculation: {t_cur} / {t_max}")
-            n, u, T, q = self.get_macros()
-            tau = min(CFL * self.h / self.xp.max(self.xp.abs(self.xi)), 1 / self.xp.max(self.get_nu(n, T)), max(t_max - t_cur, 1e-15))
-            if right_part:
-                J = self.get_J()
-            for j in range(len(self.xi)):
-                xi_v = self.xi[j]
-                if right_part:
-                    self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, tau, xi_v, J[:, j, :, :])
-                else:
-                    self.F[:, j, :, :] = step_f(self.F[:, j, :, :], self.h, tau, xi_v)
-            t_cur += tau
-
-
-    def get_J(self):
-        n, u, T, q = self.get_macros()
+    @staticmethod
+    def get_fS(F, properties: ModelProperties):
+        n, u, T, q = PropertyCalculator.get_macros(F, properties)
 
         n_4d = n[:, None, None, None]
         u_4d = u[:, None, None, None]
-        T_4d = self.xp.maximum(T[:, None, None, None], 1e-12)
+        T_4d = xp.maximum(T[:, None, None, None], 1e-12)
         q_4d = q[:, None, None, None]
 
-        tx = (self.XI1[None] - u_4d) / self.xp.sqrt(T_4d)
-        ty = self.XI2[None] / self.xp.sqrt(T_4d)
-        tz = self.XI3[None] / self.xp.sqrt(T_4d)
+        tx = (properties.XI1[None] - u_4d) / xp.sqrt(T_4d)
+        ty = properties.XI2[None] / xp.sqrt(T_4d)
+        tz = properties.XI3[None] / xp.sqrt(T_4d)
         c_sq = tx * tx + ty * ty + tz * tz
-        self.xp.exp(-c_sq, out=c_sq)
+        xp.exp(-c_sq, out=c_sq)
         M = c_sq
 
-        Z = self.xp.sum(M, axis=(1, 2, 3), keepdims=True) * self.dV
+        Z = (2 * xp.pi * T_4d) ** 1.5
         fM = n_4d * M / Z
-        S = 2 * q_4d / (self.xp.maximum(n_4d, 1e-12) * T_4d ** 1.5)
+        S = 2 * q_4d / (xp.maximum(n_4d, 1e-12) * T_4d ** 1.5)
 
-        shakhov_correction = (4 / 5) * (1 - self.Pr) * S * tx * (c_sq - 2.5)
+        shakhov_correction = (4 / 5) * (1 - properties.Pr) * S * tx * (c_sq - 2.5)
+        fS = fM * (1 + shakhov_correction)
+        return fS
+
+    @staticmethod
+    def get_J(F, properties: ModelProperties):
+        n, u, T, q = PropertyCalculator.get_macros(F, properties)
+
+        n_4d = n[:, None, None, None]
+        u_4d = u[:, None, None, None]
+        T_4d = xp.maximum(T[:, None, None, None], 1e-12)
+        q_4d = q[:, None, None, None]
+
+        tx = (properties.XI1[None] - u_4d) / xp.sqrt(T_4d)
+        ty = properties.XI2[None] / xp.sqrt(T_4d)
+        tz = properties.XI3[None] / xp.sqrt(T_4d)
+        c_sq = tx * tx + ty * ty + tz * tz
+        xp.exp(-c_sq, out=c_sq)
+        M = c_sq
+
+        #Z = (2 * xp.pi * T_4d) ** 1.5
+        Z = xp.sum(M, axis=(1, 2, 3), keepdims=True) * properties.dV
+        fM = n_4d * M / Z
+        S = 2 * q_4d / (xp.maximum(n_4d, 1e-12) * T_4d ** 1.5)
+
+        shakhov_correction = (4 / 5) * (1 - properties.Pr) * S * tx * (c_sq - 2.5)
         fS = fM * (1 + shakhov_correction)
 
-        nu =  self.get_nu(self.xp.maximum(n, 1e-12), T) # T ** (1 - self.w) * (0.9 / self.Kn)
+        nu =  PropertyCalculator.get_nu(xp.maximum(n, 1e-12), xp.maximum(T, 1e-12), properties)
         nu_4d = nu.reshape(-1, 1, 1, 1)
 
-        J = nu_4d * (fS - self.F[1:-1])
+        J = nu_4d * (fS - F[1:-1])
         return J
+
+
+class ShakhovSolver:
+
+    def __init__(self, state: ModelState, properties: ModelProperties,
+                 solver, prop_calc=PropertyCalculator):
+        self.state = state
+        self.props = properties
+        self.solver = solver
+        self.prop_calc = prop_calc
+
+    def calculate(self, CFL, t_max):
+        t_cur = 0
+        while t_cur < t_max:
+            print(f"calculation: {t_cur} / {t_max}")
+            n, u, T, q = self.prop_calc.get_macros(self.state.F, self.props)
+            """tau = min(CFL * self.props.h / xp.max(xp.abs(self.props.xi)),
+                      max(t_max - t_cur, 1e-15))"""
+            tau = min(CFL * self.props.h / xp.max(xp.abs(self.props.xi)),
+                      1 / xp.max(self.prop_calc.get_nu(n, T, self.props)),
+                      max(t_max - t_cur, 1e-15))
+            self.solver.calculate_layer(self.state.F, tau, self.props, self.prop_calc)
+            t_cur += tau
+
+
+
+
+"""
+class BKG:
+    
+
+
+    
+"""

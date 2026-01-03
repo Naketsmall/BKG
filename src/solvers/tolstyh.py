@@ -2,6 +2,8 @@ import numpy as np
 from numba import njit
 
 from src.solvers.base import Solver
+from src.config.libloader import xp, cuda_is_available
+
 
 
 def thomas_solve(A, D):
@@ -15,9 +17,9 @@ def thomas_solve(A, D):
     n = A.shape[0]
 
     # Диагонали
-    a = np.zeros(n)
-    b = np.zeros(n)
-    c = np.zeros(n)
+    a = xp.zeros(n)
+    b = xp.zeros(n)
+    c = xp.zeros(n)
     for i in range(n):
         b[i] = A[i, i]
         if i > 0:
@@ -26,23 +28,23 @@ def thomas_solve(A, D):
             c[i] = A[i, i + 1]
 
     # Приводим D в форму (batch, n)
-    D = np.moveaxis(D, 0, -1)  # теперь D.shape = (..., n)
+    D = xp.moveaxis(D, 0, -1)  # теперь D.shape = (..., n)
     batch_shape = D.shape[:-1]
     D = D.reshape(-1, n)  # склеиваем батчи
 
-    X = np.zeros_like(D)
+    X = xp.zeros_like(D)
     for i in range(D.shape[0]):
-        X[i] = _thomas_algorithm_optimized(a.copy(), b.copy(), c.copy(), D[i].copy())
+        X[i] = _thomas_algorithm(a.copy(), b.copy(), c.copy(), D[i].copy())
 
     X = X.reshape(*batch_shape, n)
-    return np.moveaxis(X, -1, 0)  # возвращаем обратно
+    return xp.moveaxis(X, -1, 0)  # возвращаем обратно
 
 
 @njit(fastmath=True)
-def _thomas_algorithm_optimized(a, b, c, d):
+def _thomas_algorithm(a, b, c, d):
     """Классический метод прогонки для одной RHS"""
     n = len(d)
-    x = np.zeros(n)
+    x = xp.zeros(n)
 
     for i in range(1, n):
         w = a[i] / b[i - 1]
@@ -57,17 +59,17 @@ def _thomas_algorithm_optimized(a, b, c, d):
 
 
 def delta0(n):
-    matrix = np.zeros((n, n))
-    np.fill_diagonal(matrix[1:], -1)
-    np.fill_diagonal(matrix[:, 1:], 1)
+    matrix = xp.zeros((n, n))
+    xp.fill_diagonal(matrix[1:], -1)
+    xp.fill_diagonal(matrix[:, 1:], 1)
     return matrix
 
 
 def delta2(n):
-    matrix = np.zeros((n, n))
-    np.fill_diagonal(matrix[1:], 1)
-    np.fill_diagonal(matrix, -2)
-    np.fill_diagonal(matrix[:, 1:], 1)
+    matrix = xp.zeros((n, n))
+    xp.fill_diagonal(matrix[1:], 1)
+    xp.fill_diagonal(matrix, -2)
+    xp.fill_diagonal(matrix[:, 1:], 1)
     return matrix
 
 
@@ -84,12 +86,12 @@ def delta_cons(s, n):
 
 
 def Ah(s, n):
-    return np.eye(n) + delta2(n) / 6 - s / 4 * delta0(n)
+    return xp.eye(n) + delta2(n) / 6 - s / 4 * delta0(n)
 
 
 def Ah_cons(s, n):
-    return np.eye(n) + 1 / 6 * delta2(n) - 1 / 4 * (s[1:] * 1 / 2 * (delta2(n) + delta0(n) + 4 * np.eye(n)) - \
-                                                    s[:1] * 1 / 2 * (delta2(n) - delta0(n) + 4 * np.eye(n)))
+    return xp.eye(n) + 1 / 6 * delta2(n) - 1 / 4 * (s[1:] * 1 / 2 * (delta2(n) + delta0(n) + 4 * xp.eye(n)) - \
+                                                    s[:1] * 1 / 2 * (delta2(n) - delta0(n) + 4 * xp.eye(n)))
 
 
 def Bh(s, h, n):
@@ -101,7 +103,7 @@ def Bh_cons(s, h, n):
 
 
 def get_v(u, A, B, n):
-    u_pred = np.tensordot(B, u, axes=(1, 0))
+    u_pred = xp.tensordot(B, u, axes=(1, 0))
     v = thomas_solve(A, u_pred)
     return v
 
@@ -126,22 +128,29 @@ def step_SSP5(u, A, B, dt, coef_per=1):
 def ZBC2a(F):
     F[0] = F[1]
     F[-1] = F[-2]
-    return np.vstack(([F[0], F[0]], F, [F[-1], F[-1]]))
+    return xp.vstack(([F[0], F[0]], F, [F[-1], F[-1]]))
 
 
 class SolverL3(Solver):
     def __init__(self, n_x, h):
-        #s = np.array([(4 / 15) ** 0.5 for i in range(n_x + 5)])
-        s = np.array([0 for i in range(n_x + 5)])
+
+        s = xp.array([(4 / 15) ** 0.5 for i in range(n_x + 5)])
+        #s = xp.array([0 for i in range(n_x + 5)])
         self.Ap, self.Bp = Ah_cons(s, n_x + 4), Bh_cons(s, h, n_x + 4) # s зависит от знка направления переноса
         self.An, self.Bn = Ah_cons(-s, n_x + 4), Bh_cons(-s, h, n_x + 4)
 
-    def step(self, F, h, tau, coef_per=1, J=None):
-        if coef_per >= 1:
+    def _step(self, F, h, tau, coef_per=1, v_right_part=None):
+        if cuda_is_available:
+            F = cp.asnumpy(F)
+
+        if coef_per >= 0:
             F = step_SSP3(ZBC2a(F), self.Ap, self.Bp, tau, coef_per)[2:-2]
         else:
             F = step_SSP3(ZBC2a(F), self.An, self.Bn, tau, coef_per)[2:-2]
-        if J is not None:
-            F[1:-1] += tau * J
+        if v_right_part is not None:
+            F[1:-1] += tau * v_right_part
+
+        if cuda_is_available:
+            F = cp.asarray(F)
         return F
 

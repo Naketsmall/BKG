@@ -8,22 +8,23 @@ Kn0009 = pd.read_csv('../calculated_data/labubuKolgan/n_x:60_xi:(-10,10,40)_t:0.
 Kn009 = pd.read_csv('../calculated_data/labubuKolgan/n_x:60_xi:(-10,10,40)_t:0.28300000000000003_CFL:0.45_Kn:0.009.dat')
 Kn09 = pd.read_csv('../calculated_data/labubuKolgan/n_x:60_xi:(-10,10,40)_t:0.28300000000000003_CFL:0.45_Kn:0.9.dat')
 
-fig, axs = plt.subplots(1, 4)
-fig.suptitle(f't=0.28')
+fig, axs = plt.subplots(1, 1)
+fig.suptitle(f't=0.28, Kolgan')
+
+csh = 0.9
+
+axs.set_title('n (density)')
+axs.scatter((Kn09['x']-0.5)*csh + 0.5, Kn09['n'], color='red', linewidth=0.01, label='Kn=0.9')
+axs.plot((Kn09['x']-0.5)*csh + 0.5, Kn09['n'], color='red')
 
 
+axs.scatter((Kn09['x']-0.5)*csh + 0.5, Kn0009['n'], color='blue', linewidth=0.01, label='Kn=0.00009')
+axs.plot((Kn09['x']-0.5)*csh + 0.5, Kn0009['n'], color='blue')
 
-axs[0].set_title('n (density)')
-axs[0].scatter(Kn0009['x'], Kn0009['n'], color='blue', linewidth=0.01, label='Kn=0.00009')
-axs[0].plot(Kn0009['x'], Kn0009['n'], color='blue')
-#axs[0].scatter(Kn009['x'], Kn009['n'], color='green', linewidth=0.01, label='Kn=0.009')
-#axs[0].plot(Kn009['x'], Kn009['n'], color='green')
-axs[0].scatter(Kn09['x'], Kn09['n'], color='red', linewidth=0.01, label='Kn=0.9')
-axs[0].plot(Kn09['x'], Kn09['n'], color='red')
-axs[0].plot(exact_sod['X'], exact_sod['RHO'], color='black', label='exact')
-axs[0].grid()
-axs[0].legend()
-
+axs.plot(exact_sod['X'], exact_sod['RHO'], color='black', label='exact')
+axs.grid()
+axs.legend()
+"""
 axs[1].set_title('u (velocity)')
 axs[1].scatter(Kn0009['x'], Kn0009['u'], color='blue', linewidth=0.01, label='Kn=0.009')
 axs[1].plot(Kn0009['x'], Kn0009['u'], color='blue')
@@ -56,12 +57,11 @@ axs[3].plot(Kn09['x'], Kn09['q'], color='red')
 #axs[3].plot(exact_sod['X'], exact_sod['P']/exact_sod['RHO'], color='black', label='exact')
 axs[3].grid()
 axs[3].legend()
+"""
 
 l, r = -0.5, 1.5
-axs[0].axis(xmin=l,xmax=r)
-axs[1].axis(xmin=l,xmax=r)
-axs[2].axis(xmin=l,xmax=r)
-axs[3].axis(xmin=l,xmax=r)
+axs.axis(xmin=l,xmax=r)
+
 
 
 plt.show()

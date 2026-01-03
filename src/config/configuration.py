@@ -1,4 +1,4 @@
-import numpy as np
+from src.config.libloader import xp
 
 #TD_KN=0.1
 TD_KN = 0.09
@@ -10,10 +10,10 @@ X_LEFT, X_RIGHT = -0.5, 1.5
 XI_LEFT, XI_RIGHT = -10, 10
 
 def F_BEG_N(x):
-    return np.where(x <= 0.5, 1., 0.125)
+    return xp.where(x <= 0.5, 1., 0.125)
 
 def F_BEG_U(x):
-    return np.zeros_like(x)
+    return xp.zeros_like(x)
 
 def F_BEG_T(x):
-    return np.where(x <= 0.5, 1., 0.8)
+    return xp.where(x <= 0.5, 1., 0.8)

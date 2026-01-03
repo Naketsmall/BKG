@@ -1,6 +1,8 @@
 import numpy as np
 from abc import ABC, abstractmethod
 
+from src.thermodynamics import ModelProperties
+
 
 def PBC(F):
     F[0] = F[-2]
@@ -36,5 +38,9 @@ def W_god(u_l, u_r, coef_per=1):
 
 class Solver(ABC):
     @abstractmethod
-    def step(self, F, h, tau, coef_per=1, J=None):
+    def _step(self, F, h, tau, coef_per=1):
+        pass
+
+    @abstractmethod
+    def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
         pass
