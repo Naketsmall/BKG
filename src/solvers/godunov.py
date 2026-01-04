@@ -17,7 +17,6 @@ class SolverGodunov(Solver):
         F_diff = F.copy()
         F[1:-1] += prop_calc.get_J(F, properties) * tau
         F_diff -= F
-        print(np.sum(np.abs(F_diff), axis=(0, 1, 2, 3)))
         #fS = prop_calc.get_fS(F, properties)
         #n, u, T, q = prop_calc.get_macros(F, properties)
         #nu4d = prop_calc.get_nu(n, T, properties)[:, None, None, None]

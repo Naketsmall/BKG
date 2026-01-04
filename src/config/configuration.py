@@ -7,7 +7,7 @@ TD_PR=0.72
 TD_W = 0.2
 
 X_LEFT, X_RIGHT = -0.5, 1.5
-XI_LEFT, XI_RIGHT = -10, 10
+XI_LEFT, XI_RIGHT = -5, 5
 
 def F_BEG_N(x):
     return xp.where(x <= 0.5, 1., 0.125)

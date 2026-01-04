@@ -127,10 +127,11 @@ class PropertyCalculator:
         ty = properties.XI2[None] / xp.sqrt(T_4d)
         tz = properties.XI3[None] / xp.sqrt(T_4d)
         c_sq = tx * tx + ty * ty + tz * tz
-        xp.exp(-c_sq, out=c_sq)
-        M = c_sq
+        e2 = xp.exp(-c_sq)
+        M = e2
 
-        Z = (2 * xp.pi * T_4d) ** 1.5
+        #Z = (2 * xp.pi * T_4d) ** 1.5
+        Z = xp.sum(M, axis=(1, 2, 3), keepdims=True) * properties.dV
         fM = n_4d * M / Z
         S = 2 * q_4d / (xp.maximum(n_4d, 1e-12) * T_4d ** 1.5)
 
@@ -151,8 +152,8 @@ class PropertyCalculator:
         ty = properties.XI2[None] / xp.sqrt(T_4d)
         tz = properties.XI3[None] / xp.sqrt(T_4d)
         c_sq = tx * tx + ty * ty + tz * tz
-        xp.exp(-c_sq, out=c_sq)
-        M = c_sq
+        e2 = xp.exp(-c_sq)
+        M = e2
 
         #Z = (2 * xp.pi * T_4d) ** 1.5
         Z = xp.sum(M, axis=(1, 2, 3), keepdims=True) * properties.dV
@@ -185,19 +186,8 @@ class ShakhovSolver:
             n, u, T, q = self.prop_calc.get_macros(self.state.F, self.props)
             """tau = min(CFL * self.props.h / xp.max(xp.abs(self.props.xi)),
                       max(t_max - t_cur, 1e-15))"""
-            tau = min(CFL * self.props.h / xp.max(xp.abs(self.props.xi)),
+            tau = xp.min([CFL * self.props.h / xp.max(xp.abs(self.props.xi)),
                       1 / xp.max(self.prop_calc.get_nu(n, T, self.props)),
-                      max(t_max - t_cur, 1e-15))
+                      xp.max([t_max - t_cur, 1e-15])])
             self.solver.calculate_layer(self.state.F, tau, self.props, self.prop_calc)
             t_cur += tau
-
-
-
-
-"""
-class BKG:
-    
-
-
-    
-"""

@@ -5,14 +5,14 @@ from src.solvers.rk2 import SolverRK
 from src.solvers.tolstyh import SolverL3
 import matplotlib.pyplot as plt
 
-from src.datio import write_to_csv
+#from src.datio import write_to_csv
 
 from src.config.libloader import xp, cuda_is_available
 from src.thermodynamics import ModelProperties, ModelState, ShakhovSolver, PropertyCalculator
 
 CFL = 0.99
 t_max = 0.2 * 1.415
-TD_KN = 0.09
+TD_KN = 9e-5
 
 n_x = 100
 n_xi = 40
