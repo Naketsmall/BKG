@@ -19,4 +19,4 @@ class SolverRK(SolverKolgan):
             self._step(F1[:, j, :, :], properties.h, tau, xi_v)
         F[:] = 0.5 * (F0 + F1)
 
-        F[1:-1] += tau * prop_calc.get_J(F, properties)
+        super()._calculate_collisions(F, tau, properties, prop_calc)

@@ -14,13 +14,9 @@ class SolverGodunov(Solver):
         for j in range(len(properties.xi)):
             xi_v = properties.xi[j]
             self._step(F[:, j, :, :], properties.h, tau, xi_v)
-        F_diff = F.copy()
-        F[1:-1] += prop_calc.get_J(F, properties) * tau
-        F_diff -= F
-        #fS = prop_calc.get_fS(F, properties)
-        #n, u, T, q = prop_calc.get_macros(F, properties)
-        #nu4d = prop_calc.get_nu(n, T, properties)[:, None, None, None]
-        #F[1:-1] = F[1:-1] * xp.exp(-nu4d * tau) + fS * (-xp.expm1(-nu4d * tau))
+        # F[1:-1] += prop_calc.get_J(F, properties) * tau
+
+        super()._calculate_collisions(F, tau, properties, prop_calc)
         #(1 - xp.exp(-nu4d * tau))
         #return F
 

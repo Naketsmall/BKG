@@ -14,4 +14,4 @@ class SolverKolgan(Solver):
         for j in range(len(properties.xi)):
             xi_v = properties.xi[j]
             self._step(F[:, j, :, :], properties.h, tau, xi_v)
-        F[1:-1] += prop_calc.get_J(F, properties) * tau
+        super()._calculate_collisions(F, tau, properties, prop_calc)

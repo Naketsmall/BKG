@@ -44,3 +44,9 @@ class Solver(ABC):
     @abstractmethod
     def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
         pass
+
+    def _calculate_collisions(self, F, tau, properties: ModelProperties, prop_calc):
+        fS = prop_calc.get_fS(F, properties)
+        n, u, T, q = prop_calc.get_macros(F, properties)
+        nu4d = prop_calc.get_nu(n, T, properties)[:, None, None, None]
+        F[1:-1] = F[1:-1] * xp.exp(-nu4d * tau) + fS * (-xp.expm1(-nu4d * tau))

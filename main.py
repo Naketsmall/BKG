@@ -31,7 +31,7 @@ model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
 
 properties = ModelProperties(model_config)
 state = (ModelState(properties, model_config))
-solver = ShakhovSolver(state, properties, SolverGodunov())
+solver = ShakhovSolver(state, properties, SolverRK())
 
 solver.calculate(CFL, t_max)
 
@@ -44,7 +44,7 @@ n, u, T, q = PropertyCalculator.get_solution_macros(state.F, properties)
 
 
 fig, axs = plt.subplots(1, 3)
-fig.suptitle(f'n_x:{n_x}, x:({X_LEFT},{X_RIGHT},{n_x}), xi:({XI_LEFT},{XI_RIGHT},{n_xi}), t:{t_max}, CFL:{CFL}_Kn:{TD_KN}')
+fig.suptitle(f'n_x:{n_x}, x:({X_LEFT},{X_RIGHT},{n_x}), xi:({XI_LEFT},{XI_RIGHT},{n_xi}), t:{t_max.__round__(3)}, CFL:{CFL}_Kn:{TD_KN}')
 
 axs[0].set_title('n (density)')
 axs[0].scatter(x, n, linewidth=0.01)
