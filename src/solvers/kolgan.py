@@ -2,8 +2,8 @@ from src.solvers.base import *
 
 
 class SolverKolgan(Solver):
-    def _step(self, F, h, tau, coef_per=1):
-        ZBC(F)
+    def _step(self, F, h, tau, bc, coef_per=1):
+        bc.apply(F)
         sigma = minmod(F)
         F_r = F - 0.5 * sigma
         F_l = F + 0.5 * sigma
@@ -13,5 +13,5 @@ class SolverKolgan(Solver):
     def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
         for j in range(len(properties.xi)):
             xi_v = properties.xi[j]
-            self._step(F[:, j, :, :], properties.h, tau, xi_v)
+            self._step(F[:, j, :, :], properties.h, tau, properties.bc, xi_v)
         super()._calculate_collisions(F, tau, properties, prop_calc)

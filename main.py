@@ -1,3 +1,4 @@
+from src.boundary_condition import ZeroGradBoundaryCondition
 from src.config.configuration import *
 from src.solvers.godunov import SolverGodunov
 from src.solvers.rk2 import SolverRK
@@ -23,13 +24,9 @@ model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
                 'Kn': TD_KN, 'Pr': TD_PR, 'w': TD_W}
 
 
-#model = BKG(model_config, xp)
-#solver = SolverGodunov()
-#solver = SolverRK()
-#solver = SolverL3(n_x+1, model.h)
-#model.calculate(CFL, t_max, solver._step, right_part=True)
 
-properties = ModelProperties(model_config)
+bc = ZeroGradBoundaryCondition(1)
+properties = ModelProperties(model_config, bc)
 state = (ModelState(properties, model_config))
 solver = ShakhovSolver(state, properties, SolverRK())
 
@@ -37,14 +34,13 @@ solver.calculate(CFL, t_max)
 
 
 
-x = properties.x[:-1]+properties.h/2
+x = properties.x[bc.n_ghost:len(properties.x)-bc.n_ghost+1]+properties.h/2 #TODO: вопрос
 if cuda_is_available:
     x = xp.asnumpy(x)
 n, u, T, q = PropertyCalculator.get_solution_macros(state.F, properties)
 
-
 fig, axs = plt.subplots(1, 3)
-fig.suptitle(f'n_x:{n_x}, x:({X_LEFT},{X_RIGHT},{n_x}), xi:({XI_LEFT},{XI_RIGHT},{n_xi}), t:{t_max.__round__(3)}, CFL:{CFL}_Kn:{TD_KN}')
+fig.suptitle(f'n_x:{n_x}, x:({X_LEFT},{X_RIGHT},{n_x}), xi:({XI_LEFT},{XI_RIGHT},{n_xi}), t:{t_max.__round__(3)}, CFL:{CFL}, Kn:{TD_KN}')
 
 axs[0].set_title('n (density)')
 axs[0].scatter(x, n, linewidth=0.01)

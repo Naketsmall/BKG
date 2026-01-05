@@ -1,16 +1,9 @@
+from src.boundary_condition import BoundaryCondition
 from src.config.libloader import xp, cuda_is_available
 from abc import ABC, abstractmethod
 
 from src.thermodynamics import ModelProperties
 
-
-def PBC(F):
-    F[0] = F[-2]
-    F[-1] = F[1]
-
-def ZBC(F):
-    F[0] = F[1]
-    F[-1] = F[-2]
 
 def minmod(F):
     F_left = xp.roll(F, shift=1, axis=0)
@@ -38,15 +31,18 @@ def W_god(u_l, u_r, coef_per=1):
 
 class Solver(ABC):
     @abstractmethod
-    def _step(self, F, h, tau, coef_per=1):
+    def _step(self, F, h, tau, bc: BoundaryCondition,coef_per=1):
         pass
 
     @abstractmethod
     def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
         pass
 
-    def _calculate_collisions(self, F, tau, properties: ModelProperties, prop_calc):
+    @staticmethod
+    def _calculate_collisions(F, tau, properties: ModelProperties, prop_calc):
         fS = prop_calc.get_fS(F, properties)
         n, u, T, q = prop_calc.get_macros(F, properties)
         nu4d = prop_calc.get_nu(n, T, properties)[:, None, None, None]
-        F[1:-1] = F[1:-1] * xp.exp(-nu4d * tau) + fS * (-xp.expm1(-nu4d * tau))
+        F[properties.bc.n_ghost:-properties.bc.n_ghost] = \
+            F[properties.bc.n_ghost:-properties.bc.n_ghost] * \
+            xp.exp(-nu4d * tau) + fS * (-xp.expm1(-nu4d * tau))

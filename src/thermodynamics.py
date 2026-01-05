@@ -1,12 +1,12 @@
 from typing import Tuple
+
+from src.boundary_condition import BoundaryCondition
 from src.config.libloader import xp, cuda_is_available
 
 import numpy as np
 
-
-
 class ModelProperties:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, bc: BoundaryCondition):
 
         self.x = xp.linspace(config['X_LEFT'], config['X_RIGHT'], config['n_x'])
         self.xi = xp.linspace(config['XI_LEFT'], config['XI_RIGHT'], config['n_xi'])
@@ -22,6 +22,8 @@ class ModelProperties:
         self.Pr = config['Pr']
         self.w = config['w']
 
+        self.bc = bc
+
 
 class ModelState:
 
@@ -31,24 +33,35 @@ class ModelState:
 
     def init_conditions(self, properties: ModelProperties, config: dict):
 
+        N = len(properties.x)
+
         n = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
-        n[1:-1] = config['F_BEG_N']( (properties.x[:-1] + properties.x[1:])/2 )
+        n[properties.bc.n_ghost:-properties.bc.n_ghost] = config['F_BEG_N'](
+            (properties.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
+             properties.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
+        )
 
         u = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
-        u[1:-1] = config['F_BEG_U']( (properties.x[:-1] + properties.x[1:])/2 )
+        u[properties.bc.n_ghost:-properties.bc.n_ghost] = config['F_BEG_U'](
+            (properties.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
+             properties.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
+        )
 
         T = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
-        T[1:-1] = config['F_BEG_T']( (properties.x[:-1] + properties.x[1:])/2 )
+        T[properties.bc.n_ghost:-properties.bc.n_ghost] = config['F_BEG_T'](
+            (properties.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
+             properties.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
+        )
 
         self.F = xp.zeros((len(properties.x) + 1, len(properties.xi), len(properties.xi), len(properties.xi)))
-        self.F[1:-1, :, :, :] = self.init_F_vectorized(n, u, T, properties)
+        self.F[properties.bc.n_ghost:-properties.bc.n_ghost, :, :, :] = self.init_F_vectorized(n, u, T, properties)
 
     @staticmethod
     def init_F_vectorized(n, u, T, properties: ModelProperties):
 
-        n_4d = n[1:-1, None, None, None]
-        u_4d = u[1:-1, None, None, None]
-        T_4d = T[1:-1, None, None, None]
+        n_4d = n[properties.bc.n_ghost:-properties.bc.n_ghost, None, None, None]
+        u_4d = u[properties.bc.n_ghost:-properties.bc.n_ghost, None, None, None]
+        T_4d = T[properties.bc.n_ghost:-properties.bc.n_ghost, None, None, None]
 
         v_sq = (properties.XI1 - u_4d) ** 2 + properties.XI2 ** 2 + properties.XI3 ** 2
 
@@ -72,22 +85,22 @@ class PropertyCalculator:
 
     @staticmethod
     def get_n(F, properties: ModelProperties):
-        return xp.einsum('ijkl->i', F[1:-1]) * properties.dV
+        return xp.einsum('ijkl->i', F[properties.bc.n_ghost:-properties.bc.n_ghost]) * properties.dV
 
     @staticmethod
     def get_u1(F, n, properties: ModelProperties):
-        u_num = xp.einsum('ijkl,j->i', F[1:-1], properties.xi) * properties.dV
+        u_num = xp.einsum('ijkl,j->i', F[properties.bc.n_ghost:-properties.bc.n_ghost], properties.xi) * properties.dV
         return u_num / xp.maximum(n, 1e-15)
 
     @staticmethod
     def get_T(F, n, u, properties: ModelProperties):
-        E = xp.einsum('ijkl, jkl -> i', F[1:-1], properties.XI_SQUARE) * properties.dV
+        E = xp.einsum('ijkl, jkl -> i', F[properties.bc.n_ghost:-properties.bc.n_ghost], properties.XI_SQUARE) * properties.dV
         return (2 / 3) * (E / xp.maximum(n, 1e-15) - u ** 2)
 
     @staticmethod
     def get_q(F, u, properties: ModelProperties):
         xi1_shifted = properties.XI1[None, :, :, :] - u[:, None, None, None]
-        q = 0.5 * xp.einsum('ijkl, ijkl -> i', xi1_shifted * properties.XI_SQUARE, F[1:-1]) * properties.dV
+        q = 0.5 * xp.einsum('ijkl, ijkl -> i', xi1_shifted * properties.XI_SQUARE, F[properties.bc.n_ghost:-properties.bc.n_ghost]) * properties.dV
         return q
 
     @staticmethod
@@ -130,7 +143,6 @@ class PropertyCalculator:
         e2 = xp.exp(-c_sq)
         M = e2
 
-        #Z = (2 * xp.pi * T_4d) ** 1.5
         Z = xp.sum(M, axis=(1, 2, 3), keepdims=True) * properties.dV
         fM = n_4d * M / Z
         S = 2 * q_4d / (xp.maximum(n_4d, 1e-12) * T_4d ** 1.5)
