@@ -25,13 +25,13 @@ def minmod(F):
     return sigma
 
 
-def W_god(u_l, u_r, coef_per=1):
+def W_god(u_l, u_r, coef_per):
     return xp.where(coef_per >= 0, u_l, u_r)
 
 
 class Solver(ABC):
     @abstractmethod
-    def _step(self, F, h, tau, bc: BoundaryCondition,coef_per=1):
+    def _step(self, F, h, tau, bc: BoundaryCondition, xi):
         pass
 
     @abstractmethod

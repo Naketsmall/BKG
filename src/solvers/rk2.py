@@ -4,19 +4,13 @@ from src.thermodynamics import ModelProperties
 
 class SolverRK(SolverKolgan):
 
-    def _step(self, F, h, tau, bc, coef_per=1):
-        super()._step(F, h, tau, bc, coef_per)
+    def _step(self, F, h, tau, bc, xi):
+        super()._step(F, h, tau, bc, xi)
 
     def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
         F0 = F.copy()
         F1 = F
-        for j in range(len(properties.xi)):
-            xi_v = properties.xi[j]
-            self._step(F1[:, j, :, :], properties.h, tau, properties.bc, xi_v)
-
-        for j in range(len(properties.xi)):
-            xi_v = properties.xi[j]
-            self._step(F1[:, j, :, :], properties.h, tau, properties.bc, xi_v)
+        self._step(F1, properties.h, tau, properties.bc, properties.xi)
+        self._step(F1, properties.h, tau, properties.bc, properties.xi)
         F[:] = 0.5 * (F0 + F1)
-
         super()._calculate_collisions(F, tau, properties, prop_calc)

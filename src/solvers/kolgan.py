@@ -2,16 +2,17 @@ from src.solvers.base import *
 
 
 class SolverKolgan(Solver):
-    def _step(self, F, h, tau, bc, coef_per=1):
+
+    def _step(self, F, h, tau, bc, xi):
         bc.apply(F)
         sigma = minmod(F)
         F_r = F - 0.5 * sigma
         F_l = F + 0.5 * sigma
-        Ws = W_god(F_l[:-1], F_r[1:], coef_per)
-        F[1:-1] += coef_per * tau / h * (Ws[:-1] - Ws[1:])
+        xi = xi[None, :, None, None]
+        Ws = W_god(F_l[:-1], F_r[1:], xi)
+        F[1:-1] += (tau / h) * xi * (Ws[:-1] - Ws[1:])
 
     def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
-        for j in range(len(properties.xi)):
-            xi_v = properties.xi[j]
-            self._step(F[:, j, :, :], properties.h, tau, properties.bc, xi_v)
+        self._step(F, properties.h, tau, properties.bc, properties.xi)
         super()._calculate_collisions(F, tau, properties, prop_calc)
+
