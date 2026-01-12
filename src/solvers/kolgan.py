@@ -2,6 +2,7 @@ from src.solvers.base import *
 
 
 class SolverKolgan(Solver):
+    __name__ = "Kolgan"
 
     def _step(self, F, h, tau, bc, xi):
         bc.apply(F)

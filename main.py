@@ -1,5 +1,6 @@
 from src.boundary_condition import ZeroGradBoundaryCondition
 from src.config.configuration import *
+from src.solvers.WENO5RK3 import WENO5RK3
 from src.solvers.godunov import SolverGodunov
 from src.solvers.rk2 import SolverRK
 
@@ -11,12 +12,12 @@ import matplotlib.pyplot as plt
 from src.config.libloader import xp, cuda_is_available
 from src.thermodynamics import ModelProperties, ModelState, ShakhovSolver, PropertyCalculator
 
-CFL = 0.99
-t_max = 0.2 * 1.415
+CFL = 0.8
+t_max = 0.3 * 1.415
 TD_KN = 9e-5
 
-n_x = 100
-n_xi = 40
+n_x = 50
+n_xi = 30
 
 model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
                 'XI_LEFT': XI_LEFT, 'XI_RIGHT': XI_RIGHT, 'n_xi': n_xi,
@@ -25,10 +26,12 @@ model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
 
 
 
-bc = ZeroGradBoundaryCondition(1)
+bc = ZeroGradBoundaryCondition(3)
+adv_solver = WENO5RK3(eps=1e-12)
+#adv_solver = SolverRK()
 properties = ModelProperties(model_config, bc)
 state = (ModelState(properties, model_config))
-solver = ShakhovSolver(state, properties, SolverRK())
+solver = ShakhovSolver(state, properties, adv_solver)
 
 solver.calculate(CFL, t_max)
 
@@ -40,7 +43,7 @@ if cuda_is_available:
 n, u, T, q = PropertyCalculator.get_solution_macros(state.F, properties)
 
 fig, axs = plt.subplots(1, 3)
-fig.suptitle(f'n_x:{n_x}, x:({X_LEFT},{X_RIGHT},{n_x}), xi:({XI_LEFT},{XI_RIGHT},{n_xi}), t:{t_max.__round__(3)}, CFL:{CFL}, Kn:{TD_KN}')
+fig.suptitle(f'{adv_solver.get_name()}, n_x:{n_x}, x:({X_LEFT},{X_RIGHT},{n_x}), xi:({XI_LEFT},{XI_RIGHT},{n_xi}), t:{t_max.__round__(3)}, CFL:{CFL}, Kn:{TD_KN}')
 
 axs[0].set_title('n (density)')
 axs[0].scatter(x, n, linewidth=0.01)

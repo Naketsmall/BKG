@@ -3,6 +3,7 @@ from src.thermodynamics import ModelProperties
 
 
 class SolverRK(SolverKolgan):
+    __name__ = "Kolgan+RK2"
 
     def _step(self, F, h, tau, bc, xi):
         super()._step(F, h, tau, bc, xi)

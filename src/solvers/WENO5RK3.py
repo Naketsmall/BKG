@@ -1,118 +1,86 @@
-"""
-from src.config.libloader import xp, cuda_is_available
-from src.solvers.base import Solver, ZBC
+from src.solvers.base import Solver
+from src.config.libloader import xp
 from src.thermodynamics import ModelProperties
 
 
-def weno5_flux_positive(f, eps=1e-6):
+class WENO5RK3(Solver):
+    __name__ = "WENO5RK3"
 
-    f_im2 = xp.roll(f, 2)
-    f_im1 = xp.roll(f, 1)
-    f_i   = f
-    f_ip1 = xp.roll(f, -1)
-    f_ip2 = xp.roll(f, -2)
+    def __init__(self, eps=1e-12):
+        self.eps = eps
 
-    # Кандидатные потоки
-    f0 = (1/3)*f_im2 - (7/6)*f_im1 + (11/6)*f_i
-    f1 = -(1/6)*f_im1 + (5/6)*f_i + (1/3)*f_ip1
-    f2 = (1/3)*f_i + (5/6)*f_ip1 - (1/6)*f_ip2
+    def _weno5(self, f):
+        eps = self.eps
 
-    # Индикаторы гладкости
-    beta0 = (
-        (13/12)*(f_im2 - 2*f_im1 + f_i)**2 +
-        (1/4)*(f_im2 - 4*f_im1 + 3*f_i)**2
-    )
-    beta1 = (
-        (13/12)*(f_im1 - 2*f_i + f_ip1)**2 +
-        (1/4)*(f_im1 - f_ip1)**2
-    )
-    beta2 = (
-        (13/12)*(f_i - 2*f_ip1 + f_ip2)**2 +
-        (1/4)*(3*f_i - 4*f_ip1 + f_ip2)**2
-    )
+        im2 = f[:-5]
+        im1 = f[1:-4]
+        i0 = f[2:-3]
+        ip1 = f[3:-2]
+        ip2 = f[4:-1]
 
-    # Оптимальные веса
-    d0, d1, d2 = 0.1, 0.6, 0.3
+        beta0 = (13 / 12) * (im2 - 2 * im1 + i0) ** 2 + (1 / 4) * (im2 - 4 * im1 + 3 * i0) ** 2
+        beta1 = (13 / 12) * (im1 - 2 * i0 + ip1) ** 2 + (1 / 4) * (im1 - ip1) ** 2
+        beta2 = (13 / 12) * (i0 - 2 * ip1 + ip2) ** 2 + (1 / 4) * (3 * i0 - 4 * ip1 + ip2) ** 2
 
-    alpha0 = d0 / (eps + beta0)**2
-    alpha1 = d1 / (eps + beta1)**2
-    alpha2 = d2 / (eps + beta2)**2
+        d0, d1, d2 = 0.1, 0.6, 0.3
 
-    alpha_sum = alpha0 + alpha1 + alpha2
+        a0 = d0 / (eps + beta0) ** 2
+        a1 = d1 / (eps + beta1) ** 2
+        a2 = d2 / (eps + beta2) ** 2
 
-    w0 = alpha0 / alpha_sum
-    w1 = alpha1 / alpha_sum
-    w2 = alpha2 / alpha_sum
+        asum = a0 + a1 + a2
 
-    return w0*f0 + w1*f1 + w2*f2
+        w0 = a0 / asum
+        w1 = a1 / asum
+        w2 = a2 / asum
 
+        q0 = (1 / 3) * im2 - (7 / 6) * im1 + (11 / 6) * i0
+        q1 = -(1 / 6) * im1 + (5 / 6) * i0 + (1 / 3) * ip1
+        q2 = (1 / 3) * i0 + (5 / 6) * ip1 - (1 / 6) * ip2
 
-def weno5_flux_negative(f, eps=1e-6):
-    return xp.roll(
-        weno5_flux_positive(xp.flip(f), eps),
-        1
-    )[::-1]
+        return w0 * q0 + w1 * q1 + w2 * q2
 
+    def _step(self, F, h, tau, bc, xi):
+        ng = bc.n_ghost
+        N_x = F.shape[0]
 
-class SolverWENO5(Solver):
+        bc.apply(F)
+        xi = xi[None, :, None, None]
+        alpha = xp.abs(xi)
 
-    def _step(self, F, h, tau, coef_per=1):
-        ZBC(F)
+        f = xi * F
+        f_p = 0.5 * (f + alpha * F)
+        f_m = 0.5 * (f - alpha * F)
 
-        alpha = xp.abs(coef_per)
-
-        f = coef_per * F
-
-        f_plus  = 0.5 * (f + alpha * F)
-        f_minus = 0.5 * (f - alpha * F)
-
-        flux_p = weno5_flux_positive(f_plus)
-        flux_m = weno5_flux_negative(f_minus)
+        flux_p = self._weno5(f_p)
+        flux_m = self._weno5(f_m[::-1])[::-1]
 
         flux = flux_p + flux_m
 
-        F[2:-2] -= tau / h * (flux[3:-1] - flux[2:-2])
+        rhs = xp.zeros_like(F)
 
+        rhs[ng:-ng] = -(
+                flux[ng - 2: N_x - ng - 2] -
+                flux[ng - 3: N_x - ng - 3]
+        ) / h
 
-class SolverWENO5RK3(SolverWENO5):
+        return rhs
 
     def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
+        h = properties.h
+        xi = properties.xi
+        bc = properties.bc
+
         F0 = F.copy()
 
-        # ---------- RK stage 1 ----------
-        for j in range(len(properties.xi)):
-            self._step(
-                F[:, j, :, :],
-                properties.h,
-                tau,
-                properties.xi[j]
-            )
+        k1 = self._step(F, h, tau, bc, xi)
+        F1 = F + tau * k1
 
-        F1 = F.copy()
+        k2 = self._step(F1, h, tau, bc, xi)
+        F2 = 0.75 * F0 + 0.25 * (F1 + tau * k2)
 
-        # ---------- RK stage 2 ----------
-        for j in range(len(properties.xi)):
-            self._step(
-                F[:, j, :, :],
-                properties.h,
-                tau,
-                properties.xi[j]
-            )
+        k3 = self._step(F2, h, tau, bc, xi)
+        F[:] = (1 / 3) * F0 + (2 / 3) * (F2 + tau * k3)
 
-        F[:] = 0.75 * F0 + 0.25 * F
-        F2 = F.copy()
-
-        # ---------- RK stage 3 ----------
-        for j in range(len(properties.xi)):
-            self._step(
-                F[:, j, :, :],
-                properties.h,
-                tau,
-                properties.xi[j]
-            )
-
-        F[:] = (1/3) * F0 + (2/3) * F
-
-        # ---------- collisions ----------
         super()._calculate_collisions(F, tau, properties, prop_calc)
-"""
+

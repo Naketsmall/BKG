@@ -3,6 +3,7 @@ from src.config.libloader import xp
 
 
 class SolverGodunov(Solver):
+    __name__ = "Godunov"
 
     def _step(self, F, h, tau, bc, xi):
         bc.apply(F)

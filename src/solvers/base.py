@@ -30,6 +30,11 @@ def W_god(u_l, u_r, coef_per):
 
 
 class Solver(ABC):
+    __name__ = "Solver"
+
+    def get_name(self):
+        return self.__name__
+
     @abstractmethod
     def _step(self, F, h, tau, bc: BoundaryCondition, xi):
         pass
