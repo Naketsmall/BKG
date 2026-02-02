@@ -54,14 +54,19 @@ class ModelState:
         )
 
         self.F = xp.zeros((len(properties.x) + 1, len(properties.xi), len(properties.xi), len(properties.xi)))
-        self.F[properties.bc.n_ghost:-properties.bc.n_ghost, :, :, :] = self.init_F_vectorized(n, u, T, properties)
+        self.F[properties.bc.n_ghost:-properties.bc.n_ghost, :, :, :] = self.init_F_vectorized(n, u, T, properties, properties.bc.n_ghost)
 
     @staticmethod
-    def init_F_vectorized(n, u, T, properties: ModelProperties):
+    def init_F_vectorized(n, u, T, properties: ModelProperties, n_ghost):
+        """
+        Инициализирует 4D [x, xi1, xi2, xi3] пространство локальным максвеллианом с параметрами (n, u, T)
+        :param n_ghost колмчество граничных ячеек.
+        Z вычисляется дискретно как сумма, а не аналитически
+        """
 
-        n_4d = n[properties.bc.n_ghost:-properties.bc.n_ghost, None, None, None]
-        u_4d = u[properties.bc.n_ghost:-properties.bc.n_ghost, None, None, None]
-        T_4d = T[properties.bc.n_ghost:-properties.bc.n_ghost, None, None, None]
+        n_4d = n[n_ghost:-n_ghost, None, None, None]
+        u_4d = u[n_ghost:-n_ghost, None, None, None]
+        T_4d = T[n_ghost:-n_ghost, None, None, None]
 
         v_sq = (properties.XI1 - u_4d) ** 2 + properties.XI2 ** 2 + properties.XI3 ** 2
 
@@ -201,5 +206,5 @@ class ShakhovSolver:
             """tau = xp.min([CFL * self.props.h / xp.max(xp.abs(self.props.xi)),
                       1 / xp.max(self.prop_calc.get_nu(n, T, self.props)),
                       xp.max([t_max - t_cur, 1e-15])])"""
-            self.solver.calculate_layer(self.state.F, tau, self.props, self.prop_calc)
+            self.solver.calculate_layer(self.state.F, t_cur, tau, self.props, self.prop_calc)
             t_cur += tau

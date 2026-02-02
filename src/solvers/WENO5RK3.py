@@ -40,12 +40,12 @@ class WENO5RK3(Solver):
 
         return w0 * q0 + w1 * q1 + w2 * q2
 
-    def _step(self, F, h, tau, bc, xi):
-        ng = bc.n_ghost
+    def _step(self, F, t, tau, properties: ModelProperties, prop_calc):
+        ng = properties.bc.n_ghost
         N_x = F.shape[0]
 
-        bc.apply(F)
-        xi = xi[None, :, None, None]
+        properties.bc.apply(F, t, properties, prop_calc)
+        xi = properties.xi[None, :, None, None]
         alpha = xp.abs(xi)
 
         f = xi * F
@@ -62,24 +62,21 @@ class WENO5RK3(Solver):
         rhs[ng:-ng] = -(
                 flux[ng - 2: N_x - ng - 2] -
                 flux[ng - 3: N_x - ng - 3]
-        ) / h
+        ) / properties.h
 
         return rhs
 
-    def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
-        h = properties.h
-        xi = properties.xi
-        bc = properties.bc
+    def calculate_layer(self, F, t, tau, properties: ModelProperties, prop_calc):
 
         F0 = F.copy()
 
-        k1 = self._step(F, h, tau, bc, xi)
+        k1 = self._step(F, t, tau, properties, prop_calc)
         F1 = F + tau * k1
 
-        k2 = self._step(F1, h, tau, bc, xi)
+        k2 = self._step(F1, t+tau, tau, properties, prop_calc)
         F2 = 0.75 * F0 + 0.25 * (F1 + tau * k2)
 
-        k3 = self._step(F2, h, tau, bc, xi)
+        k3 = self._step(F2, t+tau+tau, tau, properties, prop_calc)
         F[:] = (1 / 3) * F0 + (2 / 3) * (F2 + tau * k3)
 
         super()._calculate_collisions(F, tau, properties, prop_calc)

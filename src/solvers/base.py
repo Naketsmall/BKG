@@ -36,11 +36,11 @@ class Solver(ABC):
         return self.__name__
 
     @abstractmethod
-    def _step(self, F, h, tau, bc: BoundaryCondition, xi):
+    def _step(self, F, t, tau, properties: ModelProperties, prop_calc):
         pass
 
     @abstractmethod
-    def calculate_layer(self, F, tau, properties: ModelProperties, prop_calc):
+    def calculate_layer(self, F, t, tau, properties: ModelProperties, prop_calc):
         pass
 
     @staticmethod

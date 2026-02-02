@@ -1,11 +1,14 @@
-from src.boundary_condition import ZeroGradBoundaryCondition
+from src.boundary_condition import ZeroGradBoundaryCondition, EvapCondBoundaryCondition
 from src.config.configuration import *
 from src.solvers.WENO5RK3 import WENO5RK3
 from src.solvers.godunov import SolverGodunov
+from src.solvers.kolgan import SolverKolgan
 from src.solvers.rk2 import SolverRK
 
 from src.solvers.tolstyh import SolverL3
+import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')
 
 #from src.datio import write_to_csv
 
@@ -13,8 +16,8 @@ from src.config.libloader import xp, cuda_is_available
 from src.thermodynamics import ModelProperties, ModelState, ShakhovSolver, PropertyCalculator
 
 CFL = 0.8
-t_max = 0.3 * 1.415
-TD_KN = 9e-5
+t_max = 0.2
+TD_KN = 0.1
 
 n_x = 50
 n_xi = 30
@@ -26,9 +29,11 @@ model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
 
 
 
-bc = ZeroGradBoundaryCondition(3)
-adv_solver = WENO5RK3(eps=1e-12)
-#adv_solver = SolverRK()
+#bc = ZeroGradBoundaryCondition(3)
+bc = EvapCondBoundaryCondition(3, lambda t: 5., lambda t: 5.)
+#adv_solver = WENO5RK3(eps=1e-12)
+#adv_solver = SolverGodunov()
+adv_solver = SolverRK()
 properties = ModelProperties(model_config, bc)
 state = (ModelState(properties, model_config))
 solver = ShakhovSolver(state, properties, adv_solver)
