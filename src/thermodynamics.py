@@ -5,14 +5,18 @@ from src.config.libloader import xp, cuda_is_available
 
 import numpy as np
 
-class ModelProperties:
-    def __init__(self, config: dict, bc: BoundaryCondition):
+from src.mesh import Mesh
 
-        self.x = xp.linspace(config['X_LEFT'], config['X_RIGHT'], config['n_x'])
+
+class ModelProperties:
+    def __init__(self, config: dict, mesh: Mesh, bc: BoundaryCondition):
+
+        self.mesh = mesh
+        self.bc = bc
+
         self.xi = xp.linspace(config['XI_LEFT'], config['XI_RIGHT'], config['n_xi'])
         self.xi_cell_size = self.xi[1] - self.xi[0]
         self.dV = (self.xi[1] - self.xi[0]) ** 3
-        self.h = self.x[1] - self.x[0]
         self.XI1 = self.xi[:, None, None]
         self.XI2 = self.xi[None, :, None]
         self.XI3 = self.xi[None, None, :]
@@ -22,7 +26,6 @@ class ModelProperties:
         self.Pr = config['Pr']
         self.w = config['w']
 
-        self.bc = bc
 
 
 class ModelState:
@@ -33,27 +36,27 @@ class ModelState:
 
     def init_conditions(self, properties: ModelProperties, config: dict):
 
-        N = len(properties.x)
+        N = len(properties.mesh.x)
 
-        n = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
+        n = xp.zeros((len(properties.mesh.x) + 1), dtype=xp.float64)
         n[properties.bc.n_ghost:-properties.bc.n_ghost] = config['F_BEG_N'](
-            (properties.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
-             properties.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
+            (properties.mesh.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
+             properties.mesh.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
         )
 
-        u = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
+        u = xp.zeros((len(properties.mesh.x) + 1), dtype=xp.float64)
         u[properties.bc.n_ghost:-properties.bc.n_ghost] = config['F_BEG_U'](
-            (properties.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
-             properties.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
+            (properties.mesh.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
+             properties.mesh.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
         )
 
-        T = xp.zeros((len(properties.x) + 1), dtype=xp.float64)
+        T = xp.zeros((len(properties.mesh.x) + 1), dtype=xp.float64)
         T[properties.bc.n_ghost:-properties.bc.n_ghost] = config['F_BEG_T'](
-            (properties.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
-             properties.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
+            (properties.mesh.x[properties.bc.n_ghost-1 : N-properties.bc.n_ghost] +
+             properties.mesh.x[properties.bc.n_ghost : N-properties.bc.n_ghost+1])/2
         )
 
-        self.F = xp.zeros((len(properties.x) + 1, len(properties.xi), len(properties.xi), len(properties.xi)))
+        self.F = xp.zeros((len(properties.mesh.x) + 1, len(properties.xi), len(properties.xi), len(properties.xi)))
         self.F[properties.bc.n_ghost:-properties.bc.n_ghost, :, :, :] = self.init_F_vectorized(n, u, T, properties, properties.bc.n_ghost)
 
     @staticmethod
@@ -201,7 +204,7 @@ class ShakhovSolver:
         while t_cur < t_max:
             print(f"calculation: {t_cur} / {t_max}")
             n, u, T, q = self.prop_calc.get_macros(self.state.F, self.props)
-            tau = min(CFL * self.props.h / xp.max(xp.abs(self.props.xi)),
+            tau = min(CFL * min(self.props.mesh.get_dx()) / xp.max(xp.abs(self.props.xi)),
                       max(t_max - t_cur, 1e-15))
             """tau = xp.min([CFL * self.props.h / xp.max(xp.abs(self.props.xi)),
                       1 / xp.max(self.prop_calc.get_nu(n, T, self.props)),

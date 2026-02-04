@@ -6,7 +6,7 @@ TD_PR=0.72
 #TD_W=0.81
 TD_W = 0.2
 
-X_LEFT, X_RIGHT = -0.5, 1.5
+X_LEFT, X_RIGHT = 0, 1
 XI_LEFT, XI_RIGHT = -5, 5
 
 def F_BEG_N(x):
