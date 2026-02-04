@@ -46,12 +46,13 @@ def graded_linspace(xp, n_points, a=0.01, length=1.0):
 
     return x
 
-
-mesh1 = UnadaptableMesh(graded_linspace(xp, n_points=n_x, a=0.01, length=X_RIGHT))
-mesh2 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True))
-
-
 bc = EvapCondBoundaryCondition(2, lambda t: 5., lambda t: 5.)
+mesh1 = UnadaptableMesh(graded_linspace(xp, n_points=n_x, a=0.01, length=X_RIGHT), bc.n_ghost)
+mesh2 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost)
+mesh3 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, 200, endpoint=True), bc.n_ghost)
+
+
+
 
 
 adv_solver = SolverRK()
@@ -122,6 +123,37 @@ axs[1].plot(x2, u2, color='red')
 
 axs[2].scatter(x2, T2, linewidth=0.01)
 axs[2].plot(x2, T2, color='red')
+#axs[2].grid()
+
+
+
+properties = ModelProperties(model_config, mesh3, bc)
+state = ModelState(properties, model_config)
+solver = ShakhovSolver(state, properties, adv_solver)
+
+solver.calculate(CFL, t_max)
+
+
+
+#x = properties.mesh.x[bc.n_ghost:len(properties.mesh.x)-bc.n_ghost+1]+properties.mesh.h/2
+x3 = properties.mesh.get_centers()[bc.n_ghost:len(properties.mesh.x) - bc.n_ghost + 1]
+if cuda_is_available:
+    x = xp.asnumpy(x)
+n3, u3, T3, q3 = PropertyCalculator.get_solution_macros(state.F, properties)
+
+
+
+
+axs[0].scatter(x3, n3, linewidth=0.01)
+axs[0].plot(x3, n3, color='green')
+#axs[0].grid()
+
+axs[1].scatter(x3, u3, linewidth=0.01)
+axs[1].plot(x3, u3, color='green')
+#axs[1].grid()
+
+axs[2].scatter(x3, T3, linewidth=0.01)
+axs[2].plot(x3, T3, color='green')
 #axs[2].grid()
 
 plt.show()
