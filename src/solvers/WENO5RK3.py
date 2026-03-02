@@ -40,11 +40,12 @@ class WENO5RK3(Solver):
 
         return w0 * q0 + w1 * q1 + w2 * q2
 
-    def _step(self, F, t, tau, properties: ModelProperties, prop_calc):
+    def _step(self, F, t, tau, properties, prop_calc):
         ng = properties.bc.n_ghost
-        N_x = F.shape[0]
+        N = F.shape[0]
 
         properties.bc.apply(F, t, properties, prop_calc)
+
         xi = properties.xi[None, :, None, None]
         alpha = xp.abs(xi)
 
@@ -54,15 +55,16 @@ class WENO5RK3(Solver):
 
         flux_p = self._weno5(f_p)
         flux_m = self._weno5(f_m[::-1])[::-1]
+        flux = flux_p + flux_m  # len = N-5
 
-        flux = flux_p + flux_m
+        dx = properties.mesh.get_dx()[:, None, None, None]
 
         rhs = xp.zeros_like(F)
+        flux_diff = flux[1:] - flux[:-1]  # len = N-6
+        start = 3
+        end = start + flux_diff.shape[0]
 
-        rhs[ng:-ng] = -(
-                flux[ng - 2: N_x - ng - 2] -
-                flux[ng - 3: N_x - ng - 3]
-        ) / properties.h
+        rhs[start:end] = -flux_diff / dx[start:end]
 
         return rhs
 

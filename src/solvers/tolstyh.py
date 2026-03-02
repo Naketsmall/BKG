@@ -42,7 +42,6 @@ def thomas_solve(A, D):
 
 @njit(fastmath=True)
 def _thomas_algorithm(a, b, c, d):
-    """Классический метод прогонки для одной RHS"""
     n = len(d)
     x = xp.zeros(n)
 

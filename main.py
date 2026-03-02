@@ -31,14 +31,15 @@ model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
 
 
 
-bc = EvapCondBoundaryCondition(2, lambda t: 5., lambda t: 5.)
+bc = EvapCondBoundaryCondition(3, lambda t: 5., lambda t: 5.)
 #mesh1 = UnadaptableMesh(graded_linspace(xp, n_points=n_x, a=0.01, length=X_RIGHT), bc.n_ghost)
 
 mesh1 = RezoningMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost, alpha=0.9)
 properties = ModelProperties(model_config, mesh1, bc)
 
 
-adv_solver = SolverRK()
+adv_solver = WENO5RK3()
+adv_solver2 = SolverRK()
 properties = ModelProperties(model_config, mesh1, bc)
 state = ModelState(properties, model_config)
 solver = ShakhovSolver(state, properties, adv_solver)
@@ -118,7 +119,7 @@ axs[2].plot(x2, T2, color='red')
 mesh3 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x*4, endpoint=True), bc.n_ghost)
 properties = ModelProperties(model_config, mesh3, bc)
 state = ModelState(properties, model_config)
-solver = ShakhovSolver(state, properties, adv_solver)
+solver = ShakhovSolver(state, properties, adv_solver2)
 
 solver.calculate(CFL, t_max)
 
