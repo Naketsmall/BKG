@@ -1,4 +1,4 @@
-from src.solvers.kolgan import SolverKolgan
+from src.advection_solvers.kolgan import SolverKolgan
 from src.thermodynamics import ModelProperties
 from src.config.libloader import xp
 

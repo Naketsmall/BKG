@@ -1,8 +1,7 @@
-from src.boundary_condition import BoundaryCondition
-from src.config.libloader import xp, cuda_is_available
+from src.config.libloader import xp
 from abc import ABC, abstractmethod
 
-from src.thermodynamics import ModelProperties
+from src.thermodynamics.model_properties import ModelProperties
 
 
 def minmod(F):

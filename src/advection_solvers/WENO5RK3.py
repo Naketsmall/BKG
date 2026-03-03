@@ -1,4 +1,4 @@
-from src.solvers.base import Solver
+from src.advection_solvers.base import Solver
 from src.config.libloader import xp
 from src.thermodynamics import ModelProperties
 

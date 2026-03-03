@@ -1,4 +1,4 @@
-from src.solvers.base import *
+from src.advection_solvers.base import *
 from src.config.libloader import xp
 
 

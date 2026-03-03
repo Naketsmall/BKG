@@ -1,7 +1,7 @@
 import numpy as np
 from numba import njit
 
-from src.solvers.base import Solver
+from src.advection_solvers.base import Solver
 from src.config.libloader import xp, cuda_is_available
 
 

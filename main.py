@@ -1,20 +1,22 @@
-from src.boundary_condition import ZeroGradBoundaryCondition, EvapCondBoundaryCondition
+from src.thermodynamics.boundary_condition import EvapCondBoundaryCondition
 from src.config.configuration import *
-from src.mesh import UnadaptableMesh, graded_linspace, RezoningMesh
-from src.solvers.WENO5RK3 import WENO5RK3
-from src.solvers.godunov import SolverGodunov
-from src.solvers.kolgan import SolverKolgan
-from src.solvers.rk2 import SolverRK
+from src.mesh import UnadaptableMesh, RezoningMesh
+from src.advection_solvers.godunov import SolverGodunov
+from src.advection_solvers.kolgan import SolverKolgan
 
-from src.solvers.tolstyh import SolverL3
 import matplotlib
 import matplotlib.pyplot as plt
+
+from src.thermodynamics.model_properties import ModelProperties
+from src.thermodynamics.model_state import ModelState
+from src.thermodynamics.property_calculator import PropertyCalculator
+from src.thermodynamics.shakhov_solver import ShakhovSolver
+
 matplotlib.use('TkAgg')
 
 #from src.datio import write_to_csv
 
 from src.config.libloader import xp, cuda_is_available
-from src.thermodynamics import ModelProperties, ModelState, ShakhovSolver, PropertyCalculator
 
 CFL = 0.8
 t_max = 0.8

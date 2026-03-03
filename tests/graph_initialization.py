@@ -3,7 +3,7 @@ from scipy.special import erf
 from src.config.configuration import *
 from src.thermodynamics import *
 import matplotlib.pyplot as plt
-from src.solvers import SolverGodunov, SolverRK
+from src.advection_solvers import SolverGodunov, SolverRK
 
 
 def n_exact(x, t):
