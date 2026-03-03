@@ -18,7 +18,7 @@ from src.thermodynamics import ModelProperties, ModelState, ShakhovSolver, Prope
 
 CFL = 0.8
 t_max = 0.8
-TD_KN = 0.1
+TD_KN = 1e-5
 
 n_x = 20
 n_xi = 30
@@ -31,15 +31,14 @@ model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
 
 
 
-bc = EvapCondBoundaryCondition(3, lambda t: 5., lambda t: 5.)
+bc = EvapCondBoundaryCondition(2, lambda t: 5., lambda t: 5.)
 #mesh1 = UnadaptableMesh(graded_linspace(xp, n_points=n_x, a=0.01, length=X_RIGHT), bc.n_ghost)
 
 mesh1 = RezoningMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost, alpha=0.9)
-properties = ModelProperties(model_config, mesh1, bc)
 
 
-adv_solver = WENO5RK3()
-adv_solver2 = SolverRK()
+adv_solver = SolverGodunov()
+#adv_solver2 = SolverRK()
 properties = ModelProperties(model_config, mesh1, bc)
 state = ModelState(properties, model_config)
 solver = ShakhovSolver(state, properties, adv_solver)
@@ -48,7 +47,6 @@ solver.calculate(CFL, t_max)
 
 
 
-#x = properties.mesh.x[bc.n_ghost:len(properties.mesh.x)-bc.n_ghost+1]+properties.mesh.h/2
 x = properties.mesh.get_centers()[bc.n_ghost:len(properties.mesh.x) - bc.n_ghost + 1]
 
 
@@ -85,7 +83,7 @@ path = 'Tolstyh2'
 
 
 
-
+adv_solver = SolverKolgan()
 mesh2 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost)
 properties = ModelProperties(model_config, mesh2, bc)
 state = ModelState(properties, model_config)
@@ -115,11 +113,11 @@ axs[2].plot(x2, T2, color='red')
 #axs[2].grid()
 
 
-
+adv_solver = SolverKolgan()
 mesh3 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x*4, endpoint=True), bc.n_ghost)
 properties = ModelProperties(model_config, mesh3, bc)
 state = ModelState(properties, model_config)
-solver = ShakhovSolver(state, properties, adv_solver2)
+solver = ShakhovSolver(state, properties, adv_solver)
 
 solver.calculate(CFL, t_max)
 

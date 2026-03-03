@@ -4,63 +4,98 @@ from src.thermodynamics import ModelProperties
 
 
 class WENO5RK3(Solver):
-    __name__ = "WENO5RK3"
+    __name__ = "WENO5RK3 (fast)"
 
     def __init__(self, eps=1e-12):
         self.eps = eps
+        self._buffers_allocated = False
 
-    def _weno5(self, f):
+    def _weno5_left(self, f):
         eps = self.eps
 
         im2 = f[:-5]
         im1 = f[1:-4]
-        i0 = f[2:-3]
+        i0  = f[2:-3]
         ip1 = f[3:-2]
         ip2 = f[4:-1]
 
-        beta0 = (13 / 12) * (im2 - 2 * im1 + i0) ** 2 + (1 / 4) * (im2 - 4 * im1 + 3 * i0) ** 2
-        beta1 = (13 / 12) * (im1 - 2 * i0 + ip1) ** 2 + (1 / 4) * (im1 - ip1) ** 2
-        beta2 = (13 / 12) * (i0 - 2 * ip1 + ip2) ** 2 + (1 / 4) * (3 * i0 - 4 * ip1 + ip2) ** 2
+        beta0 = (13/12)*(im2 - 2*im1 + i0)**2 + 0.25*(im2 - 4*im1 + 3*i0)**2
+        beta1 = (13/12)*(im1 - 2*i0 + ip1)**2 + 0.25*(im1 - ip1)**2
+        beta2 = (13/12)*(i0 - 2*ip1 + ip2)**2 + 0.25*(3*i0 - 4*ip1 + ip2)**2
 
         d0, d1, d2 = 0.1, 0.6, 0.3
 
-        a0 = d0 / (eps + beta0) ** 2
-        a1 = d1 / (eps + beta1) ** 2
-        a2 = d2 / (eps + beta2) ** 2
+        a0 = d0 / (eps + beta0)**2
+        a1 = d1 / (eps + beta1)**2
+        a2 = d2 / (eps + beta2)**2
 
         asum = a0 + a1 + a2
-
         w0 = a0 / asum
         w1 = a1 / asum
         w2 = a2 / asum
 
-        q0 = (1 / 3) * im2 - (7 / 6) * im1 + (11 / 6) * i0
-        q1 = -(1 / 6) * im1 + (5 / 6) * i0 + (1 / 3) * ip1
-        q2 = (1 / 3) * i0 + (5 / 6) * ip1 - (1 / 6) * ip2
+        q0 = (1/3)*im2 - (7/6)*im1 + (11/6)*i0
+        q1 = -(1/6)*im1 + (5/6)*i0 + (1/3)*ip1
+        q2 = (1/3)*i0 + (5/6)*ip1 - (1/6)*ip2
 
-        return w0 * q0 + w1 * q1 + w2 * q2
+        return w0*q0 + w1*q1 + w2*q2
+
+    def _weno5_right(self, f):
+        eps = self.eps
+
+        ip2 = f[5:]
+        ip1 = f[4:-1]
+        i0  = f[3:-2]
+        im1 = f[2:-3]
+        im2 = f[1:-4]
+
+        beta0 = (13/12)*(ip2 - 2*ip1 + i0)**2 + 0.25*(ip2 - 4*ip1 + 3*i0)**2
+        beta1 = (13/12)*(ip1 - 2*i0 + im1)**2 + 0.25*(ip1 - im1)**2
+        beta2 = (13/12)*(i0 - 2*im1 + im2)**2 + 0.25*(3*i0 - 4*im1 + im2)**2
+
+        d0, d1, d2 = 0.3, 0.6, 0.1
+
+        a0 = d0 / (eps + beta0)**2
+        a1 = d1 / (eps + beta1)**2
+        a2 = d2 / (eps + beta2)**2
+
+        asum = a0 + a1 + a2
+        w0 = a0 / asum
+        w1 = a1 / asum
+        w2 = a2 / asum
+
+        q0 = (1/3)*ip2 - (7/6)*ip1 + (11/6)*i0
+        q1 = -(1/6)*ip1 + (5/6)*i0 + (1/3)*im1
+        q2 = (1/3)*i0 + (5/6)*im1 - (1/6)*im2
+
+        return w0*q0 + w1*q1 + w2*q2
+
+    def _alloc_buffers(self, F):
+        self._rhs = xp.zeros_like(F)
+        self._F0 = xp.zeros_like(F)
+        self._buffers_allocated = True
 
     def _step(self, F, t, tau, properties, prop_calc):
-        ng = properties.bc.n_ghost
-        N = F.shape[0]
+        if not self._buffers_allocated:
+            self._alloc_buffers(F)
 
         properties.bc.apply(F, t, properties, prop_calc)
 
         xi = properties.xi[None, :, None, None]
         alpha = xp.abs(xi)
 
-        f = xi * F
-        f_p = 0.5 * (f + alpha * F)
-        f_m = 0.5 * (f - alpha * F)
+        f_p = 0.5 * (xi + alpha) * F
+        f_m = 0.5 * (xi - alpha) * F
 
-        flux_p = self._weno5(f_p)
-        flux_m = self._weno5(f_m[::-1])[::-1]
-        flux = flux_p + flux_m  # len = N-5
+        flux = self._weno5_left(f_p) + self._weno5_right(f_m)
 
         dx = properties.mesh.get_dx()[:, None, None, None]
 
-        rhs = xp.zeros_like(F)
-        flux_diff = flux[1:] - flux[:-1]  # len = N-6
+        rhs = self._rhs
+        rhs.fill(0)
+
+        flux_diff = flux[1:] - flux[:-1]
+
         start = 3
         end = start + flux_diff.shape[0]
 
@@ -69,8 +104,11 @@ class WENO5RK3(Solver):
         return rhs
 
     def calculate_layer(self, F, t, tau, properties: ModelProperties, prop_calc):
+        if not self._buffers_allocated:
+            self._alloc_buffers(F)
 
-        F0 = F.copy()
+        F0 = self._F0
+        F0[:] = F
 
         k1 = self._step(F, t, tau, properties, prop_calc)
         F1 = F + tau * k1
@@ -78,8 +116,7 @@ class WENO5RK3(Solver):
         k2 = self._step(F1, t+tau, tau, properties, prop_calc)
         F2 = 0.75 * F0 + 0.25 * (F1 + tau * k2)
 
-        k3 = self._step(F2, t+tau+tau, tau, properties, prop_calc)
-        F[:] = (1 / 3) * F0 + (2 / 3) * (F2 + tau * k3)
+        k3 = self._step(F2, t+2*tau, tau, properties, prop_calc)
+        F[:] = (1/3) * F0 + (2/3) * (F2 + tau * k3)
 
         super()._calculate_collisions(F, tau, properties, prop_calc)
-
