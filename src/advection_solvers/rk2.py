@@ -1,6 +1,6 @@
 from src.advection_solvers.kolgan import SolverKolgan
-from src.thermodynamics import ModelProperties
 from src.config.libloader import xp
+from src.thermodynamics.model_properties import ModelProperties
 
 
 class SolverRK(SolverKolgan):
@@ -14,7 +14,7 @@ class SolverRK(SolverKolgan):
         self._F0 = xp.zeros_like(F)
         self._rk_allocated = True
 
-    def calculate_layer(self, F, t, tau, properties, prop_calc):
+    def calculate_layer(self, F, t, tau, properties: ModelProperties, prop_calc):
 
         if not self._rk_allocated:
             self._alloc_rk(F)

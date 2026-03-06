@@ -3,7 +3,7 @@ from src.config.libloader import xp
 
 
 class SolverKolgan(Solver):
-    __name__ = "Kolgan (fast)"
+    __name__ = "Kolgan"
 
     def __init__(self):
         self._buffers_allocated = False

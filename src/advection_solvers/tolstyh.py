@@ -5,15 +5,8 @@ from src.advection_solvers.base import Solver
 from src.config.libloader import xp, cuda_is_available
 
 
-
+"""
 def thomas_solve(A, D):
-    """
-    Решает систему A @ x = D
-    A : (n, n)
-    D : (..., n) или (n, batch_shape...)
-
-    Возвращает массив той же формы, что и D
-    """
     n = A.shape[0]
 
     # Диагонали
@@ -153,3 +146,4 @@ class SolverL3(Solver):
             F = cp.asarray(F)
         return F
 
+"""

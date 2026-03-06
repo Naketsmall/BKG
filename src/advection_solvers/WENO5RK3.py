@@ -1,10 +1,10 @@
 from src.advection_solvers.base import Solver
 from src.config.libloader import xp
-from src.thermodynamics import ModelProperties
+from src.thermodynamics.model_properties import ModelProperties
 
 
 class WENO5RK3(Solver):
-    __name__ = "WENO5RK3 (fast)"
+    __name__ = "WENO5RK3"
 
     def __init__(self, eps=1e-12):
         self.eps = eps

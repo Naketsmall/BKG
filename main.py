@@ -1,3 +1,6 @@
+from src.advection_solvers.DTSS1 import SolverDTSS1
+from src.advection_solvers.DTSS2 import SolverDTSS2
+from src.advection_solvers.rk2 import SolverRK
 from src.thermodynamics.boundary_condition import EvapCondBoundaryCondition
 from src.config.configuration import *
 from src.mesh import UnadaptableMesh, RezoningMesh
@@ -18,7 +21,7 @@ matplotlib.use('TkAgg')
 
 from src.config.libloader import xp, cuda_is_available
 
-CFL = 0.8
+CFL = 2
 t_max = 0.8
 TD_KN = 1e-5
 
@@ -37,9 +40,15 @@ bc = EvapCondBoundaryCondition(2, lambda t: 5., lambda t: 5.)
 #mesh1 = UnadaptableMesh(graded_linspace(xp, n_points=n_x, a=0.01, length=X_RIGHT), bc.n_ghost)
 
 mesh1 = RezoningMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost, alpha=0.9)
+mesh1 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost)
 
 
-adv_solver = SolverGodunov()
+adv_solver = SolverDTSS2(
+    explicit_solver=SolverKolgan(),
+    n_iter=20,
+    omega=0.1,
+    cfl_pseudo=0.5
+)
 #adv_solver2 = SolverRK()
 properties = ModelProperties(model_config, mesh1, bc)
 state = ModelState(properties, model_config)
@@ -83,9 +92,7 @@ path = 'Tolstyh2'
 #write_to_csv(x, n, u, T, q, f'calculated_data/{path}/n_x:{n_x}_xi:({XI_LEFT},{XI_RIGHT},{n_xi})_t:{t_max}_CFL:{CFL}_Kn:{TD_KN}.dat')
 
 
-
-
-adv_solver = SolverKolgan()
+adv_solver = SolverRK()
 mesh2 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost)
 properties = ModelProperties(model_config, mesh2, bc)
 state = ModelState(properties, model_config)
@@ -115,7 +122,12 @@ axs[2].plot(x2, T2, color='red')
 #axs[2].grid()
 
 
-adv_solver = SolverKolgan()
+adv_solver = SolverDTSS2(
+    explicit_solver=SolverKolgan(),
+    n_iter=20,
+    omega=0.1,
+    cfl_pseudo=0.5
+)
 mesh3 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x*4, endpoint=True), bc.n_ghost)
 properties = ModelProperties(model_config, mesh3, bc)
 state = ModelState(properties, model_config)
