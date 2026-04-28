@@ -1,7 +1,9 @@
+import time
+
 from src.advection_solvers.DTSS1 import SolverDTSS1
 from src.advection_solvers.DTSS2 import SolverDTSS2
 from src.advection_solvers.rk2 import SolverRK
-from src.thermodynamics.boundary_condition import EvapCondBoundaryCondition
+from src.thermodynamics.boundary_condition import EvapCondBoundaryCondition, ZeroGradBoundaryCondition
 from src.config.configuration import *
 from src.mesh import UnadaptableMesh, RezoningMesh
 from src.advection_solvers.godunov import SolverGodunov
@@ -21,40 +23,42 @@ matplotlib.use('TkAgg')
 
 from src.config.libloader import xp, cuda_is_available
 
-CFL = 2
-t_max = 0.8
+CFL = 0.8
+t_max = 0.2
 TD_KN = 1e-5
 
-n_x = 20
-n_xi = 30
+n_x = 200
+n_xi = 40
 
 
 model_config = {'X_LEFT': X_LEFT, 'X_RIGHT': X_RIGHT, 'n_x': n_x,
                 'XI_LEFT': XI_LEFT, 'XI_RIGHT': XI_RIGHT, 'n_xi': n_xi,
                 'F_BEG_N': F_BEG_N, 'F_BEG_U': F_BEG_U, 'F_BEG_T': F_BEG_T,
-                'Kn': TD_KN, 'Pr': TD_PR, 'w': TD_W}
+                'Kn': TD_KN, 'Pr': TD_PR, 'w': TD_W, 'dtype': dtype}
 
 
-
-bc = EvapCondBoundaryCondition(2, lambda t: 5., lambda t: 5.)
+bc = ZeroGradBoundaryCondition(2)
+#bc = EvapCondBoundaryCondition(2, lambda t: 5., lambda t: 5.)
 #mesh1 = UnadaptableMesh(graded_linspace(xp, n_points=n_x, a=0.01, length=X_RIGHT), bc.n_ghost)
 
-mesh1 = RezoningMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost, alpha=0.9)
+#mesh1 = RezoningMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost, alpha=0.9)
 mesh1 = UnadaptableMesh(xp.linspace(X_LEFT, X_RIGHT, n_x, endpoint=True), bc.n_ghost)
 
-
+'''
 adv_solver = SolverDTSS2(
     explicit_solver=SolverKolgan(),
     n_iter=20,
     omega=0.1,
     cfl_pseudo=0.5
-)
-#adv_solver2 = SolverRK()
+)'''
+adv_solver = SolverRK()
 properties = ModelProperties(model_config, mesh1, bc)
 state = ModelState(properties, model_config)
 solver = ShakhovSolver(state, properties, adv_solver)
-
+t1 = time.time()
 solver.calculate(CFL, t_max)
+t2 = time.time()
+print("calculation time = ", t2-t1)
 
 
 
@@ -69,7 +73,6 @@ fig, axs = plt.subplots(1, 3)
 fig.suptitle(f'{adv_solver.get_name()}, n_x:{n_x}, x:({X_LEFT},{X_RIGHT},{n_x}), xi:({XI_LEFT},{XI_RIGHT},{n_xi}), t:{t_max.__round__(3)}, CFL:{CFL}, Kn:{TD_KN}')
 
 print(x.shape, n.shape)
-print('diff', xp.diff(x))
 
 axs[0].set_title('n (density)')
 axs[0].scatter(x, n, linewidth=0.01)
@@ -86,7 +89,7 @@ axs[2].scatter(x, T, linewidth=0.01)
 axs[2].plot(x, T, color='blue')
 axs[2].grid()
 
-
+"""
 path = 'Tolstyh2'
 #plt.savefig(f'infographics/{path}/n_x:{n_x}_xi:({XI_LEFT},{XI_RIGHT},{n_xi})_t:{t_max}_CFL:{CFL}_Kn:{TD_KN}.png', dpi=300)
 #write_to_csv(x, n, u, T, q, f'calculated_data/{path}/n_x:{n_x}_xi:({XI_LEFT},{XI_RIGHT},{n_xi})_t:{t_max}_CFL:{CFL}_Kn:{TD_KN}.dat')
@@ -158,5 +161,5 @@ axs[2].scatter(x3, T3, linewidth=0.01)
 axs[2].plot(x3, T3, color='green')
 #axs[2].grid()
 
-
+"""
 plt.show()

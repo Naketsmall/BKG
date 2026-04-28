@@ -10,30 +10,100 @@ class PropertyCalculator:
 
     @staticmethod
     def get_n(F, properties: ModelProperties):
-        return xp.einsum('ijkl->i', F[properties.bc.n_ghost:-properties.bc.n_ghost]) * properties.dV
+        return xp.sum(F[properties.bc.n_ghost:-properties.bc.n_ghost], axis=(1, 2, 3)) * properties.dV
 
     @staticmethod
     def get_u1(F, n, properties: ModelProperties):
-        u_num = xp.einsum('ijkl,j->i', F[properties.bc.n_ghost:-properties.bc.n_ghost], properties.xi) * properties.dV
-        return u_num / xp.maximum(n, 1e-15)
+        return xp.sum(
+            F[properties.bc.n_ghost:-properties.bc.n_ghost] * properties.xi[None, :, None, None],
+            axis=(1, 2, 3)
+        ) * properties.dV / xp.maximum(n, 1e-15)
 
     @staticmethod
     def get_T(F, n, u, properties: ModelProperties):
-        E = xp.einsum('ijkl, jkl -> i', F[properties.bc.n_ghost:-properties.bc.n_ghost], properties.XI_SQUARE) * properties.dV
+
+        F_slice = F[properties.bc.n_ghost:-properties.bc.n_ghost]
+        E_x = xp.sum(
+            F_slice * properties.xi_sq_x[None, :, :, :],
+            axis=(1, 2, 3)
+        )
+
+        E_y = xp.sum(
+            F_slice * properties.xi_sq_y[None, :, :, :],
+            axis=(1, 2, 3)
+        )
+
+        E_z = xp.sum(
+            F_slice * properties.xi_sq_z[None, :, :, :],
+            axis=(1, 2, 3)
+        )
+
+        E = (E_x + E_y + E_z) * properties.dV
+
         return (2 / 3) * (E / xp.maximum(n, 1e-15) - u ** 2)
 
     @staticmethod
     def get_q(F, u, properties: ModelProperties):
-        xi1_shifted = properties.XI1[None, :, :, :] - u[:, None, None, None]
-        q = 0.5 * xp.einsum('ijkl, ijkl -> i', xi1_shifted * properties.XI_SQUARE, F[properties.bc.n_ghost:-properties.bc.n_ghost]) * properties.dV
-        return q
+        xi_shift = properties.xi_x[None, :, :, :] - u[:, None, None, None]
+
+        c_sq = (
+                properties.xi_sq_x[None, :, :, :] +
+                properties.xi_sq_y[None, :, :, :] +
+                properties.xi_sq_z[None, :, :, :]
+        )
+
+        return 0.5 * xp.sum(
+            xi_shift * c_sq * F[properties.bc.n_ghost:-properties.bc.n_ghost],
+            axis=(1, 2, 3)
+        ) * properties.dV
+
 
     @staticmethod
     def get_macros(F, properties: ModelProperties):
-        n = PropertyCalculator.get_n(F, properties)
-        u = PropertyCalculator.get_u1(F, n, properties)
-        T = PropertyCalculator.get_T(F, n, u, properties)
-        q = PropertyCalculator.get_q(F, u, properties)
+
+        F_slice = F[properties.bc.n_ghost:-properties.bc.n_ghost]
+
+        n = xp.sum(F_slice, axis=(1, 2, 3)) * properties.dV
+
+        u_num = xp.sum(
+            F_slice * properties.xi_x[None, :, :, :],
+            axis=(1, 2, 3)
+        ) * properties.dV
+
+        u = u_num / xp.maximum(n, 1e-15)
+
+        E_x = xp.sum(
+            F_slice * properties.xi_sq_x[None, :, :, :],
+            axis=(1, 2, 3)
+        )
+
+        E_y = xp.sum(
+            F_slice * properties.xi_sq_y[None, :, :, :],
+            axis=(1, 2, 3)
+        )
+
+        E_z = xp.sum(
+            F_slice * properties.xi_sq_z[None, :, :, :],
+            axis=(1, 2, 3)
+        )
+
+        E = (E_x + E_y + E_z) * properties.dV
+
+        T = (2.0 / 3.0) * (E / xp.maximum(n, 1e-15) - u ** 2)
+
+        xi_shift = properties.xi_x[None, :, :, :] - u[:, None, None, None]
+
+        c_sq = (
+                properties.xi_sq_x[None, :, :, :] +
+                properties.xi_sq_y[None, :, :, :] +
+                properties.xi_sq_z[None, :, :, :]
+        )
+
+        q = 0.5 * xp.sum(
+            xi_shift * c_sq * F_slice,
+            axis=(1, 2, 3)
+        ) * properties.dV
+
         return n, u, T, q
 
     @staticmethod
@@ -54,54 +124,30 @@ class PropertyCalculator:
 
     @staticmethod
     def get_fS(F, properties: ModelProperties):
+
         n, u, T, q = PropertyCalculator.get_macros(F, properties)
 
-        n_4d = n[:, None, None, None]
-        u_4d = u[:, None, None, None]
-        T_4d = xp.maximum(T[:, None, None, None], 1e-12)
-        q_4d = q[:, None, None, None]
+        n4 = n[:, None, None, None]
+        u4 = u[:, None, None, None]
+        T4 = xp.maximum(T[:, None, None, None], 1e-12)
+        q4 = q[:, None, None, None]
 
-        tx = (properties.XI1[None] - u_4d) / xp.sqrt(T_4d)
-        ty = properties.XI2[None] / xp.sqrt(T_4d)
-        tz = properties.XI3[None] / xp.sqrt(T_4d)
+        sqrtT = xp.sqrt(T4)
+
+        tx = (properties.xi_x[None, :, :, :] - u4) / sqrtT
+        ty = properties.xi_y[None, :, :, :] / sqrtT
+        tz = properties.xi_z[None, :, :, :] / sqrtT
+
         c_sq = tx * tx + ty * ty + tz * tz
-        e2 = xp.exp(-c_sq)
-        M = e2
+
+        M = xp.exp(-c_sq)
 
         Z = xp.sum(M, axis=(1, 2, 3), keepdims=True) * properties.dV
-        fM = n_4d * M / Z
-        S = 2 * q_4d / (xp.maximum(n_4d, 1e-12) * T_4d ** 1.5)
 
-        shakhov_correction = (4 / 5) * (1 - properties.Pr) * S * tx * (c_sq - 2.5)
-        fS = fM * (1 + shakhov_correction)
-        return fS
+        fM = n4 * M / Z
 
-    @staticmethod
-    def get_J(F, properties: ModelProperties):
-        n, u, T, q = PropertyCalculator.get_macros(F, properties)
+        S = 2 * q4 / (xp.maximum(n4, 1e-12) * T4 ** 1.5)
 
-        n_4d = n[:, None, None, None]
-        u_4d = u[:, None, None, None]
-        T_4d = xp.maximum(T[:, None, None, None], 1e-12)
-        q_4d = q[:, None, None, None]
+        shakhov = (4 / 5) * (1 - properties.Pr) * S * tx * (c_sq - 2.5)
 
-        tx = (properties.XI1[None] - u_4d) / xp.sqrt(T_4d)
-        ty = properties.XI2[None] / xp.sqrt(T_4d)
-        tz = properties.XI3[None] / xp.sqrt(T_4d)
-        c_sq = tx * tx + ty * ty + tz * tz
-        e2 = xp.exp(-c_sq)
-        M = e2
-
-        #Z = (2 * xp.pi * T_4d) ** 1.5
-        Z = xp.sum(M, axis=(1, 2, 3), keepdims=True) * properties.dV
-        fM = n_4d * M / Z
-        S = 2 * q_4d / (xp.maximum(n_4d, 1e-12) * T_4d ** 1.5)
-
-        shakhov_correction = (4 / 5) * (1 - properties.Pr) * S * tx * (c_sq - 2.5)
-        fS = fM * (1 + shakhov_correction)
-
-        nu =  PropertyCalculator.get_nu(xp.maximum(n, 1e-12), xp.maximum(T, 1e-12), properties)
-        nu_4d = nu.reshape(-1, 1, 1, 1)
-
-        J = nu_4d * (fS - F[1:-1])
-        return J
+        return fM * (1 + shakhov)

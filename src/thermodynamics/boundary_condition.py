@@ -47,23 +47,34 @@ class EvapCondBoundaryCondition(BoundaryCondition):
 
     @staticmethod
     def init_F_vectorized(n, u, T, properties, n_ghost):
-        """
-        Инициализирует 4D [x, xi1, xi2, xi3] пространство локальным максвеллианом с параметрами (n, u, T)
-        :param n_ghost колмчество граничных ячеек.
-        Z вычисляется дискретно как сумма, а не аналитически
-        """
         N = n.shape[0]
 
-        n_4d = n[n_ghost:N-n_ghost, None, None, None]
-        u_4d = u[n_ghost:N-n_ghost, None, None, None]
-        T_4d = T[n_ghost:N-n_ghost, None, None, None]
+        n_loc = n[n_ghost:N - n_ghost]
+        u_loc = u[n_ghost:N - n_ghost]
+        T_loc = T[n_ghost:N - n_ghost]
 
-        v_sq = (properties.XI1 - u_4d) ** 2 + properties.XI2 ** 2 + properties.XI3 ** 2
+        xi = properties.xi
+        dxi = properties.xi_cell_size
 
-        M = xp.exp(-v_sq / T_4d)
 
-        Z = xp.sum(M, axis=(1, 2, 3), keepdims=True) * properties.dV
-        F = n_4d * M / Z
+        M1 = xp.exp(-(xi[None, :] - u_loc[:, None]) ** 2 / T_loc[:, None])
+        M2 = xp.exp(-(xi[None, :] ** 2) / T_loc[:, None])
+        M3 = xp.exp(-(xi[None, :] ** 2) / T_loc[:, None])
+
+
+        Z1 = xp.sum(M1, axis=1) * dxi
+        Z2 = xp.sum(M2, axis=1) * dxi
+        Z3 = xp.sum(M3, axis=1) * dxi
+
+        Z = Z1 * Z2 * Z3
+
+        F = (
+                n_loc[:, None, None, None]
+                * M1[:, :, None, None]
+                * M2[:, None, :, None]
+                * M3[:, None, None, :]
+                / Z[:, None, None, None]
+        )
 
         return F
 

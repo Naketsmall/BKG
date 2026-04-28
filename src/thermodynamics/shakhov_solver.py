@@ -16,9 +16,10 @@ class ShakhovSolver:
     def calculate(self, CFL, t_max):
         t_cur = 0
         n = 1
+        xi_max = xp.max(xp.abs(self.props.xi))
         while t_cur < t_max:
             print(f"calculation: {t_cur} / {t_max}")
-            tau = min(CFL * min(self.props.mesh.get_dx()) / xp.max(xp.abs(self.props.xi)),
+            tau = min(CFL * min(self.props.mesh.get_dx()) / xi_max,
                       max(t_max - t_cur, 1e-15))
             self.solver.calculate_layer(self.state.F, t_cur, tau, self.props, self.prop_calc)
             if n % 1 == 0:

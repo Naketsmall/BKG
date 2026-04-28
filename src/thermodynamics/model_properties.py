@@ -11,11 +11,19 @@ class ModelProperties:
 
         self.xi = xp.linspace(config['XI_LEFT'], config['XI_RIGHT'], config['n_xi'])
         self.xi_cell_size = self.xi[1] - self.xi[0]
-        self.dV = (self.xi[1] - self.xi[0]) ** 3
-        self.XI1 = self.xi[:, None, None]
-        self.XI2 = self.xi[None, :, None]
-        self.XI3 = self.xi[None, None, :]
-        self.XI_SQUARE = (self.XI1 ** 2 + self.XI2 ** 2 + self.XI3 ** 2)
+        self.dV = self.xi_cell_size ** 3
+
+
+        self.xi_sq = self.xi ** 2
+
+        self.xi_x = self.xi[:, None, None]
+        self.xi_y = self.xi[None, :, None]
+        self.xi_z = self.xi[None, None, :]
+
+        self.xi_sq_x = self.xi_sq[:, None, None]
+        self.xi_sq_y = self.xi_sq[None, :, None]
+        self.xi_sq_z = self.xi_sq[None, None, :]
+
 
         self.Kn = config['Kn']
         self.Pr = config['Pr']
